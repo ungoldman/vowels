@@ -34,6 +34,9 @@ const readout = document.getElementById('readout')
 const pitch = document.getElementById('pitch')
 const tilt = document.getElementById('tilt')
 const breath = document.getElementById('breath')
+// the rest of what a phonation sets, each a slider named for its synth parameter
+const FOLD = ['openQuotient', 'voicing', 'rough', 'diplophonia', 'openBandwidth']
+const fold = Object.fromEntries(FOLD.map((id) => [id, document.getElementById(id)]))
 const round = document.getElementById('round')
 const latch = document.getElementById('latch')
 const voice = document.getElementById('voice')
@@ -261,28 +264,38 @@ function setPitch(hz) {
   send({ f0 })
 }
 
-// tilt and breath come from the sliders, so a preset can be bent by hand
+function showSource() {
+  document.getElementById('db').textContent = tilt.value
+  for (const slider of [breath, ...Object.values(fold)]) {
+    slider.nextElementSibling.textContent = slider.value
+  }
+}
+showSource()
+
+// The source comes from the sliders, so a preset can be bent by hand and
+// nothing a phonation sets is out of sight.
 function sendSource() {
   const speaker = VOICES[voice.value]
-  const fold = PHONATIONS[phonation.value]
-  document.getElementById('db').textContent = tilt.value
+  const rough = Number(fold.rough.value)
+  showSource()
   send({
-    openQuotient: fold.openQuotient + speaker.openQuotient,
+    openQuotient: Number(fold.openQuotient.value),
     tilt: Number(tilt.value),
     breath: Number(breath.value),
-    voicing: fold.voicing,
-    jitter: speaker.jitter * fold.rough,
-    shimmer: speaker.shimmer * fold.rough,
-    diplophonia: fold.diplophonia,
-    openBandwidth: fold.openBandwidth
+    voicing: Number(fold.voicing.value),
+    jitter: speaker.jitter * rough,
+    shimmer: speaker.shimmer * rough,
+    diplophonia: Number(fold.diplophonia.value),
+    openBandwidth: Number(fold.openBandwidth.value)
   })
 }
 
 function applyPresets() {
   const speaker = VOICES[voice.value]
-  const fold = PHONATIONS[phonation.value]
-  tilt.value = fold.tilt + speaker.tilt
-  breath.value = fold.breath + speaker.breath
+  const preset = PHONATIONS[phonation.value]
+  tilt.value = preset.tilt + speaker.tilt
+  breath.value = preset.breath + speaker.breath
+  for (const id of FOLD) fold[id].value = preset[id] + (speaker[id] ?? 0)
   setPitch(pitch.value)
   sendSource()
   refresh()
@@ -304,6 +317,7 @@ voice.addEventListener('change', setVoice)
 phonation.addEventListener('change', applyPresets)
 tilt.addEventListener('input', sendSource)
 breath.addEventListener('input', sendSource)
+for (const id of FOLD) fold[id].addEventListener('input', sendSource)
 round.addEventListener('change', () => refresh())
 latch.addEventListener('change', setLatch)
 
@@ -809,8 +823,9 @@ for (const [symbol, u, v, rounded] of VOWELS) {
     labels.append(mark)
   }
   const text = document.createElementNS(SVG, 'text')
-  text.setAttribute('class', 'ipa')
-  text.setAttribute('x', x + (centered ? 0 : rounded ? 16 : -16))
+  // anchored by its near edge, so the gap to the point holds at any type size
+  text.setAttribute('class', centered ? 'ipa' : rounded ? 'ipa right' : 'ipa left')
+  text.setAttribute('x', x + (centered ? 0 : rounded ? 10 : -10))
   text.setAttribute('y', y)
   text.textContent = symbol
   labels.append(text)
