@@ -467,9 +467,14 @@ ctx.audioWorklet.addModule('synth.js').then(() => {
 
 // The face in the gap beside the chart, a front view that mouths the vowel.
 // Jaw and lip opening follow height, lip width follows backness, rounding
-// purses the lips, and the brows follow pitch. The eyes watch the dot, and
-// their lids follow phonation, pitch, and the squint of a spread vowel. The
-// nostrils flare with breath and with an open mouth.
+// purses the lips, and the brows follow pitch. The eyes watch the dot while
+// it sounds and the pointer when it is quiet, and their lids follow
+// phonation, pitch, and the squint of a spread vowel.
+// Tilt shows as effort. A flat tilt is a pressed voice, so the brows knit,
+// the lids narrow, the lips thin, and the jaw muscle stands out. A steep tilt
+// is a slack one, so the brows ease, the jaw hangs, and the mouth corners drop.
+// Breath shows as air: the nostrils flare, the cheeks fill, the lips leak a
+// little, and all of it swells and settles on a slow breathing cycle.
 // It is a cartoon of the visible articulators, not a measured model, and
 // the tongue, which does most of the work, cannot be seen from the front.
 const FACE_X = 100,
@@ -490,7 +495,9 @@ const RATES = {
   gazeX: 16,
   gazeY: 16,
   lid: 14,
-  flare: 12
+  flare: 12,
+  effort: 9,
+  puff: 9
 }
 // how far the lids sit open for each phonation, 1 being ordinary
 const LIDS = { modal: 1, breathy: 0.8, creaky: 0.55, whisper: 1.15 }
@@ -498,6 +505,10 @@ const EYE_X = 24,
   EYE_Y = -17
 const BLINK_EVERY = 4200,
   BLINK_FOR = 130
+// one breath every four seconds
+const BREATHS_PER_MS = 0.25 / 1000
+// how soon the gaze saturates as its target moves away, in SVG units
+const GAZE_REACH = 80
 const head = Object.fromEntries(
   ['mesh', 'nodes', 'outline', 'features', 'mouth'].map((id) => [id, document.getElementById(id)])
 )
@@ -512,11 +523,19 @@ const face = {
   gazeX: 0,
   gazeY: 0,
   lid: 1,
-  flare: 0
+  flare: 0,
+  effort: 1 - tilt.value / tilt.max,
+  puff: 0
 }
 const speed = Object.fromEntries(Object.keys(face).map((key) => [key, 0]))
 let lastFrame = performance.now()
 let nextBlink = performance.now() + BLINK_EVERY
+// where the pointer last was over the page, in the chart's coordinates
+let pointer = null
+
+window.addEventListener('pointermove', (event) => {
+  pointer = svgPoint(event)
+})
 
 // The right half of the face as triangles over named points, mirrored when
 // drawn. The mesh lines are the edges of these.
@@ -549,8 +568,14 @@ function faceTarget(now) {
   const pursed = 0.32 + 0.25 * v
   if (now > nextBlink + BLINK_FOR) nextBlink = now + BLINK_EVERY * (0.5 + Math.random())
   const brow = (pitch.value - pitch.min) / (pitch.max - pitch.min)
-  // where the dot is, as seen from between the eyes
-  const [dotX, dotY] = toXY(u, v)
+  // the eyes go to the dot while it sounds, and wander after the pointer when idle
+  const [lookX, lookY] = !sounding && pointer ? pointer : toXY(u, v)
+  const lookDX = lookX - FACE_X
+  const lookDY = lookY - FACE_Y - EYE_Y
+  const reach = Math.hypot(lookDX, lookDY) + GAZE_REACH
+  const effort = 1 - tilt.value / tilt.max
+  // a square root, so the small breath of an ordinary voice still shows
+  const air = Math.sqrt(breath.value / breath.max)
   // a close spread vowel pulls the cheeks up into the eyes, as a smile does
   const squint = sounding ? 0.25 * (1 - rounded) * (1 - v) : 0
   return {
@@ -560,20 +585,27 @@ function faceTarget(now) {
     lips: sounding ? rounded : 0,
     jaw: sounding ? v : 0,
     brow,
-    gazeX: Math.max(-1, Math.min(1, (dotX - FACE_X) / 300)),
-    gazeY: Math.max(-1, Math.min(1, (dotY - FACE_Y - EYE_Y) / 180)),
-    lid: LIDS[phonation.value] + 0.15 * brow - squint,
-    flare: (0.7 * breath.value) / breath.max + (sounding ? 0.3 * v : 0),
+    gazeX: lookDX / reach,
+    gazeY: lookDY / reach,
+    lid: LIDS[phonation.value] + 0.13 + 0.15 * brow - squint - 0.15 * effort,
+    flare: 0.7 * air + (sounding ? 0.3 * v : 0),
+    effort,
+    puff: air,
     voice: sounding ? 1 : 0,
     blink: !still && now > nextBlink ? 1 : 0
   }
 }
 
-function facePoints() {
+function facePoints(now) {
   const jaw = 14 * face.jaw
   const lift = 6 * face.brow
   const lid = Math.max(0, face.lid) * (1 - face.blink)
-  const flare = Math.max(0, face.flare)
+  const effort = clamp(face.effort)
+  const lax = 1 - effort
+  // breathing is movement nobody asked for, so reduced motion holds it still
+  const swell = still ? 1 : 1 + 0.25 * Math.sin(2 * Math.PI * BREATHS_PER_MS * now)
+  const flare = Math.max(0, face.flare) * swell
+  const puff = Math.max(0, face.puff) * swell
   const spread = Math.max(0, face.width - 0.8) * face.voice
   // both eyes look the same way, so the pupils are not mirrored
   const pupil = (side) => {
@@ -588,8 +620,10 @@ function facePoints() {
   }
   const my = 36 + jaw * 0.45
   const w = 26 * face.width
-  const inner = 12 * Math.max(0, face.open)
-  const outer = inner + 3 + 2 * face.lips
+  // breath parts the lips a little even on a close vowel
+  const inner = 12 * Math.max(0, face.open) + 3 * puff * face.voice
+  const outer = inner + Math.max(1.5, 3 + 2 * face.lips - 1.2 * effort + 0.8 * lax)
+  const cornerY = my + 3.5 * lax - effort
   return {
     crown: [0, -78],
     m1: [0, -52],
@@ -598,32 +632,36 @@ function facePoints() {
     m4: [0, 10 - flare],
     // a spread lip lifts the base of the nose
     m5: [0, 17 - 6 * spread],
-    m8: [0, 57 + jaw * 0.9],
-    chin: [0, 71 + jaw],
+    m8: [0, 57 + jaw * 0.9 + 2 * lax],
+    chin: [0, 71 + jaw + 3 * lax],
     a1: [26, -74],
     a2: [46, -56],
     a3: [54, -28],
-    a4: [55, 0],
-    a5: [51, 24 + jaw * 0.3],
-    a6: [42, 46 + jaw * 0.6],
-    a7: [22, 64 + jaw],
+    a4: [55 + 5 * puff, 0],
+    a5: [51 + 7 * puff + 2 * effort, 24 + jaw * 0.3],
+    a6: [42 + 3 * puff + 4 * effort, 46 + jaw * 0.6 + 4 * lax],
+    a7: [22, 64 + jaw + 3 * lax],
     b1: [24, -50],
-    b2: [38, -29 - lift],
-    b3: [12, -30 - lift * 1.3],
+    b2: [38, -29 - lift - 2 * effort + 2 * lax],
+    // effort draws the inner brow down and in, and ease lets it rise
+    b3: [12 - 3.5 * effort, -30 - lift * 1.3 + 5 * effort - 3 * lax],
+    // the crease between knitted brows, which shrinks to nothing at ease
+    creaseTop: [3, -30 - lift * 1.3 + 5 * effort],
+    creaseBottom: [3.5, -30 - lift * 1.3 + 5 * effort + 7 * effort],
     e1: [36, -17],
     e2: [EYE_X, EYE_Y - 5 * lid],
     e3: [13, -16],
     e4: [EYE_X, EYE_Y + 5 * lid],
-    c1: [34, 6],
-    c2: [24, 25 + jaw * 0.3],
+    c1: [34 + 4 * puff, 6 - 2 * effort],
+    c2: [24 + 6 * puff - 2 * effort, 25 + jaw * 0.3 - 2 * effort],
     c3: [31, 45 + jaw * 0.6],
     n1: [9 + 3.5 * flare, 12 - 1.5 * flare],
-    corner: [w, my],
+    corner: [w, cornerY],
     upper: [w / 2, my - outer],
     lower: [w / 2, my + outer],
     lipTop: [0, my - outer * 0.85],
     lipBottom: [0, my + outer * 1.05],
-    innerCorner: [w * 0.85, my],
+    innerCorner: [w * 0.85, cornerY],
     innerUpper: [w * 0.4, my - inner],
     innerLower: [w * 0.4, my + inner],
     pupils: [pupil(1), pupil(-1)]
@@ -646,7 +684,7 @@ function drawFace(now) {
     speed[key] = (speed[key] - rate * push) * decay
   }
 
-  const p = facePoints()
+  const p = facePoints(now)
   const at = ([x, y]) => `${(FACE_X + x).toFixed(1)},${(FACE_Y + y).toFixed(1)}`
   const flip = ([x, y]) => [-x, y]
   const ring = (points) => `M${points.map(at).join('L')}Z`
@@ -679,6 +717,7 @@ function drawFace(now) {
     [
       rings(names('e1', 'e2', 'e3', 'e4')),
       both(line)(p.b2, p.b3),
+      both(line)(p.creaseTop, p.creaseBottom),
       both(line)(p.m3, p.n1),
       both(line)(p.n1, p.m5),
       both(line)(p.n1, p.m4),
