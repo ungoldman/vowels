@@ -1,0 +1,21 @@
+{
+  "name": "vowels",
+  "description": "A playable IPA vowel chart",
+  "version": "0.0.0",
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "fast-check": "^4.10.2"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "private": true,
+  "scripts": {
+    "coverage": "node --test --experimental-test-coverage --test-coverage-exclude='test/**' --test-coverage-exclude='start.js' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 test/*.test.js",
+    "format": "biome check --write .",
+    "lint": "biome check .",
+    "start": "node start.js",
+    "test": "npm run lint && node --test test/*.test.js"
+  },
+  "type": "module"
+}

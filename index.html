@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vowel chart</title>
+<style>
+  /* palette and type follow ungoldman.com: black field, monospace readout */
+  :root {
+    color-scheme: dark;
+    --bg: #000;
+    --fg: #e9eaee;
+    --dim: #9aa0ab;
+    --faint: rgba(255, 255, 255, 0.4);
+    --rule: rgba(255, 255, 255, 0.28);
+    --mono: ui-monospace, Menlo, Consolas, monospace;
+    --ipa: "Charis SIL", "Doulos SIL", "Gentium Plus", serif;
+  }
+  body {
+    box-sizing: border-box;
+    height: 100dvh;
+    margin: 0;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 13px/1.4 var(--mono);
+  }
+  header { display: flex; align-items: baseline; gap: 1.5ch; }
+  header .rule {
+    flex: 1;
+    height: 1px;
+    align-self: center;
+    background: linear-gradient(90deg, var(--rule), rgba(255, 255, 255, 0));
+  }
+  h1 { margin: 0; font-size: 1.2rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+  header p { margin: 0; color: var(--dim); letter-spacing: 0.04em; }
+  /* Random overrides every control below, so it sits apart from them */
+  header label { align-self: center; }
+  /* the chart takes whatever height the controls leave */
+  svg { flex: 1 1 0; min-height: 0; width: 100%; touch-action: none; cursor: crosshair; user-select: none; }
+  .frame { fill: none; stroke: var(--faint); stroke-width: 1; }
+  .anchor { fill: var(--faint); pointer-events: none; }
+  .ipa {
+    fill: var(--fg);
+    font: 22px var(--ipa);
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+    /* halo so a symbol stays legible where it sits on a frame line */
+    paint-order: stroke;
+    stroke: var(--bg);
+    stroke-width: 6px;
+    stroke-linejoin: round;
+  }
+  .axis { fill: var(--faint); font: 10px var(--mono); letter-spacing: 0.3em; text-transform: uppercase; }
+  .key {
+    fill: var(--faint);
+    font: 10px var(--mono);
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+    paint-order: stroke;
+    stroke: var(--bg);
+    stroke-width: 4px;
+  }
+  #head path { fill: none; stroke: #fff; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
+  #mesh { stroke-width: 0.5; stroke-opacity: 0.2; }
+  #nodes { stroke-width: 1.6; stroke-opacity: 0.45; }
+  #outline { stroke-width: 1; stroke-opacity: 0.6; }
+  #features { stroke-width: 0.9; stroke-opacity: 0.75; }
+  /* --voice runs 0 to 1 with the sound, so the lips light up as they open */
+  #mouth {
+    stroke-width: 1.2;
+    stroke-opacity: calc(0.7 + 0.3 * var(--voice, 0));
+    fill: var(--bg);
+    filter: drop-shadow(0 0 4px rgba(255, 255, 255, calc(0.8 * var(--voice, 0))));
+  }
+  #dot { fill: #fff; pointer-events: none; filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.9)); }
+  #readout { margin: 0; min-height: 1.4em; text-align: center; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; white-space: pre; }
+  .controls { display: flex; gap: 8px 22px; flex-wrap: wrap; align-items: center; justify-content: center; }
+  label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.8ch;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  label span { color: var(--fg); font-variant-numeric: tabular-nums; }
+  input { accent-color: var(--fg); margin: 0; }
+  select {
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: var(--fg);
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 3px;
+    padding: 2px 6px;
+  }
+  button {
+    font: 18px var(--ipa);
+    color: var(--fg);
+    background: transparent;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 2px 10px;
+    cursor: pointer;
+    transition: background 0.2s, text-shadow 0.2s;
+  }
+  /* a button that is a word, set apart from the IPA symbol buttons */
+  button.word { font: inherit; letter-spacing: inherit; text-transform: inherit; padding: 4px 10px; }
+  button:hover,
+  button:focus-visible { background: rgba(255, 255, 255, 0.12); text-shadow: 0 0 12px rgba(255, 255, 255, 0.6); }
+  :focus-visible { outline: 1px solid rgba(255, 255, 255, 0.5); outline-offset: 2px; }
+  kbd {
+    font: 11px var(--mono);
+    letter-spacing: 0;
+    text-transform: none;
+    padding: 0 4px;
+    color: var(--fg);
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 3px;
+  }
+  #keys { margin: 0; text-align: center; font-size: 11px; letter-spacing: 0.02em; color: var(--dim); }
+  @media (prefers-reduced-motion: reduce) {
+    button { transition: none; }
+  }
+</style>
+
+<header>
+  <h1>Vowels</h1>
+  <p>ipa formant synthesizer</p>
+  <span class="rule"></span>
+  <label><button id="random" class="word">Random</button> <kbd>/</kbd></label>
+</header>
+
+<svg id="chart" viewBox="0 15 640 410" role="img" aria-label="IPA vowel chart, press and drag to hear a vowel">
+  <polygon class="frame" points="60,50 540,50 540,400 300,400"/>
+  <line class="frame" x1="140" y1="166.7" x2="540" y2="166.7"/>
+  <line class="frame" x1="220" y1="283.3" x2="540" y2="283.3"/>
+  <line class="frame" x1="300" y1="50" x2="420" y2="400"/>
+  <text class="axis" x="60" y="30" text-anchor="middle">front</text>
+  <text class="axis" x="300" y="30" text-anchor="middle">central</text>
+  <text class="axis" x="540" y="30" text-anchor="middle">back</text>
+  <text class="axis" x="578" y="50" dominant-baseline="central">close</text>
+  <text class="axis" x="578" y="400" dominant-baseline="central">open</text>
+  <g id="head">
+    <path id="mesh"/>
+    <path id="nodes"/>
+    <path id="outline"/>
+    <path id="features"/>
+    <path id="mouth"/>
+  </g>
+  <g id="keycaps"></g>
+  <g id="labels"></g>
+  <circle id="dot" r="9"/>
+</svg>
+
+<p id="readout"></p>
+
+<div class="controls">
+  <span id="glides" class="controls"></span>
+  <label><input type="checkbox" id="round"> Rounded <kbd>`</kbd> <kbd>Shift</kbd></label>
+  <label><input type="checkbox" id="latch"> Hold <kbd>Space</kbd></label>
+  <label>Voice <kbd>\</kbd>
+    <select id="voice">
+      <option value="min">min</option>
+      <option value="low" selected>low</option>
+      <option value="mid">mid</option>
+      <option value="high">high</option>
+      <option value="max">max</option>
+    </select>
+  </label>
+  <label>Phonation <kbd>P</kbd>
+    <select id="phonation">
+      <option value="modal">modal</option>
+      <option value="breathy">breathy</option>
+      <option value="creaky">creaky</option>
+      <option value="whisper">whisper</option>
+    </select>
+  </label>
+  <label>Pitch <kbd>-</kbd> <kbd>=</kbd> <input type="range" id="pitch" min="70" max="320" value="120"> <span id="hz">120</span> Hz</label>
+  <label>Tilt <kbd>[</kbd> <kbd>]</kbd> <input type="range" id="tilt" min="0" max="24" step="1" value="3"> <span id="db">3</span> dB</label>
+  <label>Breath <kbd>;</kbd> <kbd>'</kbd> <input type="range" id="breath" min="0" max="0.6" step="0.01" value="0.04"></label>
+</div>
+
+<p id="keys">
+  The small letters on the chart are keys, each plays its spot while held, and two together play the point between them.
+  Arrow keys move the dot.
+  <kbd>Shift</kbd> flips rounding while held.
+  Holding <kbd>\</kbd>, <kbd>P</kbd>, or <kbd>/</kbd> keeps stepping.
+  <kbd>Esc</kbd> silences everything.
+</p>
+
+<script type="module" src="app.js"></script>
+</html>
