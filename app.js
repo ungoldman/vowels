@@ -465,8 +465,9 @@ ctx.audioWorklet.addModule('synth.js').then(() => {
 // Tilt shows as effort. A flat tilt is a pressed voice, so the brows knit,
 // the lids narrow, the lips thin, and the jaw muscle stands out. A steep tilt
 // is a slack one, so the brows ease, the jaw hangs, and the mouth corners drop.
-// Breath shows as air: the nostrils flare, the cheeks fill, the lips leak a
-// little, and all of it swells and settles on a slow breathing cycle.
+// Breath shows as air let out: the nostrils flare, the lips part, the cheeks
+// draw in, and the jaw hangs, so the head gets longer and leaner, never
+// wider. All of it swells and settles on a slow breathing cycle.
 // It is a cartoon of the visible articulators, not a measured model, and
 // the tongue, which does most of the work, cannot be seen from the front.
 const FACE_X = 100,
@@ -489,7 +490,7 @@ const RATES = {
   lid: 14,
   flare: 12,
   effort: 9,
-  puff: 9
+  air: 9
 }
 // how far the lids sit open for each phonation, 1 being ordinary
 const LIDS = { modal: 1, breathy: 0.8, creaky: 0.55, whisper: 1.15 }
@@ -501,6 +502,12 @@ const BLINK_EVERY = 4200,
 const BREATHS_PER_MS = 0.25 / 1000
 // how soon the gaze saturates as its target moves away, in SVG units
 const GAZE_REACH = 80
+// Tilt as a look, from 1 pressed to -1 slack. An ordinary voice sits between
+// 4 and 6 dB and leaves the face alone. The thresholds are guesses.
+function strain() {
+  const db = Number(tilt.value)
+  return db < 4 ? 1 - db / 4 : -clamp((db - 6) / 12)
+}
 const head = Object.fromEntries(
   ['mesh', 'nodes', 'outline', 'features', 'mouth'].map((id) => [id, document.getElementById(id)])
 )
@@ -516,8 +523,8 @@ const face = {
   gazeY: 0,
   lid: 1,
   flare: 0,
-  effort: 1 - tilt.value / tilt.max,
-  puff: 0
+  effort: strain(),
+  air: 0
 }
 const speed = Object.fromEntries(Object.keys(face).map((key) => [key, 0]))
 let lastFrame = performance.now()
@@ -529,15 +536,27 @@ window.addEventListener('pointermove', (event) => {
   pointer = svgPoint(event)
 })
 
+// an octagon, near enough to round at this size
+const PUPIL = Array.from({ length: 8 }, (_, i) => [
+  Math.cos((i * Math.PI) / 4),
+  Math.sin((i * Math.PI) / 4)
+])
 // The right half of the face as triangles over named points, mirrored when
 // drawn. The mesh lines are the edges of these.
 const TRIANGLES = `
-  crown a1 m1, a1 b1 m1, a1 a2 b1, a2 b2 b1, a2 a3 b2, b1 b2 b3, b1 b3 m1, m1 b3 m2,
-  a3 e1 b2, b2 e1 e2, b2 e2 b3, b3 e2 e3, b3 e3 m2, m2 e3 m3,
-  a3 a4 e1, e1 a4 c1, e1 c1 e4, e4 c1 e3, e3 c1 n1, e3 n1 m3, m3 n1 m4, m4 n1 m5,
-  a4 a5 c1, c1 a5 c2, c1 c2 n1, n1 c2 upper, n1 upper m5, m5 upper lipTop,
+  crown a1 m1, a1 b1 m1, a1 a2 b1, a2 t1 b1, a2 a3 t1, t1 a3 b2, b1 t1 b2,
+  b1 b2 b4, b1 b4 b3, b1 b3 m1, m1 b3 m2,
+  b3 b4 b4l, b3 b4l b3l, b4 b2 b4l,
+  a3 e1 b2, b2 e1 e2o, b4l b2 e2o, b4l e2o e2, b4l e2 e2i, b3l b4l e2i, b3l e2i e3,
+  m2 b3 b3l, m2 b3l nb, nb b3l e3, m2 nb m3, nb e3 n0, nb n0 m3,
+  a3 k1 e1, a3 a4 k1, k1 a4 c1, e1 k1 c1,
+  e1 c1 e4o, e4o c1 u1, e4o u1 e4, e4 u1 e4i, e4i u1 e3, e3 u1 n0, n0 u1 n1, u1 c1 n1,
+  m3 n0 m4, n0 nt m4, n0 n1 nt, nt n1 n2, nt n2 n4, m4 nt n4, m4 n4 m5,
+  a4 a5 c1, c1 a5 c2, c1 c2 n1, n1 c2 upper, n1 upper n2, n2 upper upperIn, n2 upperIn n4,
+  n4 upperIn m5, m5 upperIn lipTop,
   c2 corner upper, a5 a6 c2, c2 a6 c3, c2 c3 corner, corner c3 lower,
-  c3 a6 a7, c3 a7 lower, lower a7 m8, lower m8 lipBottom, a7 chin m8
+  c3 a6 a7, c3 a7 ch, c3 ch lower, lower ch lowerIn, lowerIn ch m8, lowerIn m8 lipBottom,
+  ch a7 chin, ch chin m8
 `
   .split(',')
   .map((triangle) => triangle.trim().split(' '))
@@ -565,7 +584,7 @@ function faceTarget(now) {
   const lookDX = lookX - FACE_X
   const lookDY = lookY - FACE_Y - EYE_Y
   const reach = Math.hypot(lookDX, lookDY) + GAZE_REACH
-  const effort = 1 - tilt.value / tilt.max
+  const effort = strain()
   // a square root, so the small breath of an ordinary voice still shows
   const air = Math.sqrt(breath.value / breath.max)
   // a close spread vowel pulls the cheeks up into the eyes, as a smile does
@@ -579,41 +598,36 @@ function faceTarget(now) {
     brow,
     gazeX: lookDX / reach,
     gazeY: lookDY / reach,
-    lid: LIDS[phonation.value] + 0.13 + 0.15 * brow - squint - 0.15 * effort,
+    lid: LIDS[phonation.value] + 0.13 + 0.15 * brow - squint - 0.15 * Math.max(0, effort),
     flare: 0.7 * air + (sounding ? 0.3 * v : 0),
     effort,
-    puff: air,
+    air,
     voice: sounding ? 1 : 0,
     blink: !still && now > nextBlink ? 1 : 0
   }
 }
 
 function facePoints(now) {
-  const jaw = 14 * face.jaw
+  const jaw = 10 * face.jaw
   const lift = 6 * face.brow
   const lid = Math.max(0, face.lid) * (1 - face.blink)
   const effort = clamp(face.effort)
-  const lax = 1 - effort
+  const lax = clamp(-face.effort)
   // breathing is movement nobody asked for, so reduced motion holds it still
   const swell = still ? 1 : 1 + 0.25 * Math.sin(2 * Math.PI * BREATHS_PER_MS * now)
   const flare = Math.max(0, face.flare) * swell
-  const puff = Math.max(0, face.puff) * swell
+  const air = Math.max(0, face.air) * swell
   const spread = Math.max(0, face.width - 0.8) * face.voice
   // both eyes look the same way, so the pupils are not mirrored
   const pupil = (side) => {
     const x = side * EYE_X + 5 * face.gazeX
     const y = EYE_Y + 2.5 * face.gazeY * lid
-    return [
-      [x - 1.6, y],
-      [x, y - 1.8 * lid],
-      [x + 1.6, y],
-      [x, y + 1.8 * lid]
-    ]
+    return PUPIL.map(([dx, dy]) => [x + 1.7 * dx, y + 1.9 * lid * dy])
   }
   const my = 36 + jaw * 0.45
   const w = 26 * face.width
   // breath parts the lips a little even on a close vowel
-  const inner = 12 * Math.max(0, face.open) + 3 * puff * face.voice
+  const inner = 9.5 * Math.max(0, face.open) + 2 * air * face.voice
   const outer = inner + Math.max(1.5, 3 + 2 * face.lips - 1.2 * effort + 0.8 * lax)
   const cornerY = my + 3.5 * lax - effort
   return {
@@ -621,41 +635,64 @@ function facePoints(now) {
     m1: [0, -52],
     m2: [0, -28],
     m3: [0, -10],
-    m4: [0, 10 - flare],
+    m4: [0, 9.5 - 0.5 * flare],
     // a spread lip lifts the base of the nose
     m5: [0, 17 - 6 * spread],
-    m8: [0, 57 + jaw * 0.9 + 2 * lax],
-    chin: [0, 71 + jaw + 3 * lax],
-    a1: [26, -74],
-    a2: [46, -56],
-    a3: [54, -28],
-    a4: [55 + 5 * puff, 0],
-    a5: [51 + 7 * puff + 2 * effort, 24 + jaw * 0.3],
-    a6: [42 + 3 * puff + 4 * effort, 46 + jaw * 0.6 + 4 * lax],
-    a7: [22, 64 + jaw + 3 * lax],
-    b1: [24, -50],
-    b2: [38, -29 - lift - 2 * effort + 2 * lax],
-    // effort draws the inner brow down and in, and ease lets it rise
-    b3: [12 - 3.5 * effort, -30 - lift * 1.3 + 5 * effort - 3 * lax],
-    // the crease between knitted brows, which shrinks to nothing at ease
-    creaseTop: [3, -30 - lift * 1.3 + 5 * effort],
-    creaseBottom: [3.5, -30 - lift * 1.3 + 5 * effort + 7 * effort],
+    m8: [0, 55 + jaw * 0.9 + 1.5 * lax + air],
+    chin: [0, 67 + jaw + 2 * lax + 1.5 * air],
+    a1: [23, -74],
+    a2: [41, -56],
+    a3: [48, -28],
+    a4: [49, 0],
+    a5: [45 - 2.5 * air + 2 * effort, 24 + jaw * 0.3],
+    a6: [37 - 2 * air + 4 * effort, 45 + jaw * 0.6 + 3 * lax + air],
+    a7: [20, 61 + jaw + 2 * lax + 1.5 * air],
+    b1: [22, -50],
+    // The brow is a tapered shape: a thick inner end, an arch, and a tail.
+    // Effort draws the inner end down and in, and ease lets it rise.
+    b2: [40, -30 - lift - effort + lax],
+    b3: [11.5 - 2.5 * effort, -32 - lift * 1.3 + 3.5 * effort - 2 * lax],
+    b3l: [12 - 2.5 * effort, -29 - lift * 1.3 + 3.5 * effort - 2 * lax],
+    b4: [27 - effort, -34.5 - lift * 1.2 + effort],
+    b4l: [26.5 - effort, -32.3 - lift * 1.2 + effort],
+    t1: [41, -41],
+    k1: [42.5, -9],
+    // each lid is a corner, a shoulder, a peak, a shoulder, a corner
     e1: [36, -17],
-    e2: [EYE_X, EYE_Y - 5 * lid],
+    e2o: [30.5, EYE_Y - 4 * lid],
+    e2: [EYE_X, EYE_Y - 5.5 * lid],
+    e2i: [18, EYE_Y - 4 * lid],
     e3: [13, -16],
-    e4: [EYE_X, EYE_Y + 5 * lid],
-    c1: [34 + 4 * puff, 6 - 2 * effort],
-    c2: [24 + 6 * puff - 2 * effort, 25 + jaw * 0.3 - 2 * effort],
-    c3: [31, 45 + jaw * 0.6],
-    n1: [9 + 3.5 * flare, 12 - 1.5 * flare],
+    e4i: [18, EYE_Y + 3 * lid],
+    e4: [EYE_X, EYE_Y + 4 * lid],
+    e4o: [30.5, EYE_Y + 3 * lid],
+    u1: [22, 0],
+    // slack cheeks sink in and down
+    c1: [33 - 3 * air, 6 - 2 * effort + 1.5 * air],
+    c2: [24 - 2 * effort, 25 + jaw * 0.3 - 2 * effort + air],
+    c3: [28, 45 + jaw * 0.6],
+    // The nose from the front is mostly its base: the bridge is two faint
+    // mesh lines, and only the wings and the underside are drawn bright.
+    nb: [3.5, -24],
+    n0: [4.5, -5],
+    nt: [6.8 + 0.5 * flare, 8 - 0.5 * flare],
+    n1: [9.5 + 3 * flare, 11.5 - flare],
+    n2: [7.8 + 1.5 * flare, 15 - 4 * spread],
+    n4: [3.6, 16 - 5 * spread],
+    ch: [10, 51.5 + jaw * 0.9 + 1.5 * lax + air],
     corner: [w, cornerY],
-    upper: [w / 2, my - outer],
-    lower: [w / 2, my + outer],
-    lipTop: [0, my - outer * 0.85],
-    lipBottom: [0, my + outer * 1.05],
+    // the upper lip peaks either side of a dip, and the lower is one full curve
+    upper: [w * 0.62, my - outer * 0.7],
+    upperIn: [w * 0.22, my - outer],
+    lipTop: [0, my - outer * 0.82],
+    lower: [w * 0.62, my + outer * 0.72],
+    lowerIn: [w * 0.26, my + outer * 1.02],
+    lipBottom: [0, my + outer * 1.08],
     innerCorner: [w * 0.85, cornerY],
-    innerUpper: [w * 0.4, my - inner],
-    innerLower: [w * 0.4, my + inner],
+    innerUpperOut: [w * 0.66, my - inner * 0.62],
+    innerUpper: [w * 0.34, my - inner],
+    innerLowerOut: [w * 0.66, my + inner * 0.62],
+    innerLower: [w * 0.34, my + inner],
     pupils: [pupil(1), pupil(-1)]
   }
 }
@@ -707,12 +744,12 @@ function drawFace(now) {
   head.features.setAttribute(
     'd',
     [
-      rings(names('e1', 'e2', 'e3', 'e4')),
-      both(line)(p.b2, p.b3),
-      both(line)(p.creaseTop, p.creaseBottom),
-      both(line)(p.m3, p.n1),
-      both(line)(p.n1, p.m5),
-      both(line)(p.n1, p.m4),
+      rings(names('e1', 'e2o', 'e2', 'e2i', 'e3', 'e4i', 'e4', 'e4o')),
+      rings(names('b3', 'b4', 'b2', 'b4l', 'b3l')),
+      both(line)(p.nt, p.n1),
+      both(line)(p.n1, p.n2),
+      both(line)(p.n2, p.n4),
+      both(line)(p.n4, p.m5),
       ...p.pupils.map(ring)
     ].join('')
   )
@@ -720,12 +757,14 @@ function drawFace(now) {
     'd',
     [
       ring([
-        ...names('lipTop', 'upper', 'corner', 'lower', 'lipBottom'),
-        ...names('lower', 'corner', 'upper').map(flip)
+        ...names('lipTop', 'upperIn', 'upper', 'corner', 'lower', 'lowerIn', 'lipBottom'),
+        ...names('lowerIn', 'lower', 'corner', 'upper', 'upperIn').map(flip)
       ]),
       ring([
-        ...names('innerUpper', 'innerCorner', 'innerLower'),
-        ...names('innerLower', 'innerCorner', 'innerUpper').map(flip)
+        ...names('innerUpper', 'innerUpperOut', 'innerCorner', 'innerLowerOut', 'innerLower'),
+        ...names('innerLower', 'innerLowerOut', 'innerCorner', 'innerUpperOut', 'innerUpper').map(
+          flip
+        )
       ])
     ].join('')
   )
