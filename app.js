@@ -255,8 +255,10 @@ for (const [label, from, to] of GLIDES) {
 
 function setPitch(hz) {
   pitch.value = hz
-  document.getElementById('hz').textContent = pitch.value
-  send({ f0: Number(pitch.value) * PHONATIONS[phonation.value].pitch })
+  // creaky sounds below the slider, so the readout is what is heard
+  const f0 = Number(pitch.value) * PHONATIONS[phonation.value].pitch
+  document.getElementById('hz').textContent = Math.round(f0)
+  send({ f0 })
 }
 
 // tilt and breath come from the sliders, so a preset can be bent by hand
