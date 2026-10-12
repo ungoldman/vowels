@@ -80,7 +80,6 @@ let cycleTimer = 0
 // what the face mouths, which trails pos during a glide
 let shape = { u: 0.5, v: 0.5, rounded: 0 }
 let sounding = false
-let shift = false
 let held = false
 let gliding = 0
 const keys = []
@@ -95,8 +94,7 @@ function chord() {
 // formants at a point, in the current voice
 const voiced = (u, v, rounded) => formants(u, v, rounded, VOICES[voice.value].scale)
 
-// Shift flips whatever the checkbox says, so it works from either state
-const isRounded = () => round.checked !== shift
+const isRounded = () => round.checked
 
 function refresh(smooth) {
   const rounded = isRounded()
@@ -114,7 +112,6 @@ function gate() {
 
 function follow(event) {
   pos = toUV(...svgPoint(event))
-  shift = event.shiftKey
   refresh()
 }
 
@@ -323,13 +320,18 @@ const ARROWS = {
 }
 
 // keys that step through a menu, and keep stepping while held
+const step = (select, by) => {
+  select.selectedIndex = (select.selectedIndex + by + select.length) % select.length
+}
+
+// each takes 1 to step forward or -1 to step back, which is Shift
 const CYCLES = {
-  Backslash() {
-    voice.selectedIndex = (voice.selectedIndex + 1) % voice.length
+  Backslash(by) {
+    step(voice, by)
     setVoice()
   },
-  KeyP() {
-    phonation.selectedIndex = (phonation.selectedIndex + 1) % phonation.length
+  KeyP(by) {
+    step(phonation, by)
     applyPresets()
   }
 }
@@ -378,19 +380,15 @@ window.addEventListener('keydown', (event) => {
   if (event.target.matches('input, select, button')) return
   const { code } = event
 
-  if (code === 'ShiftLeft' || code === 'ShiftRight') {
-    shift = true
-    refresh()
-    return
-  }
-
   if (code in CYCLES) {
     event.preventDefault()
     if (event.repeat) return
     wake()
-    CYCLES[code]()
+    // the direction is fixed when the key goes down, for the whole hold
+    const by = event.shiftKey ? -1 : 1
+    CYCLES[code](by)
     clearInterval(cycleTimer)
-    cycleTimer = setInterval(CYCLES[code], CYCLE_EVERY)
+    cycleTimer = setInterval(() => CYCLES[code](by), CYCLE_EVERY)
     return
   }
 
@@ -427,11 +425,6 @@ window.addEventListener('keydown', (event) => {
 
 window.addEventListener('keyup', (event) => {
   const { code } = event
-  if (code === 'ShiftLeft' || code === 'ShiftRight') {
-    shift = false
-    refresh()
-    return
-  }
   if (code in CYCLES) clearInterval(cycleTimer)
   if (code === RANDOM_KEY) clearInterval(randomTimer)
   const i = keys.indexOf(code)
@@ -450,7 +443,6 @@ window.addEventListener('blur', () => {
   clearInterval(randomTimer)
   randomHeld = false
   keys.length = 0
-  shift = false
   held = false
   gate()
 })
