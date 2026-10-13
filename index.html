@@ -15,22 +15,32 @@
     --mono: ui-monospace, Menlo, Consolas, monospace;
     --ipa: "Charis SIL", "Doulos SIL", "Gentium Plus", serif;
   }
-  /* One screen, never a scrolling page: the chart stays in view and the
-     panel scrolls on its own. Stacked on a narrow screen, side by side on a
-     wide one. */
+  /* On a wide screen the stage (title, chart, readout, transport) stays in
+     view with the panel a full-height column beside it. On a narrow one the
+     face leaves the chart for a row of its own, the one-tap controls sit
+     beside and under it, and the sliders are a sheet that slides up from the bottom.
+     app.js moves the face and those controls when the layout changes. */
   body {
     box-sizing: border-box;
-    height: 100dvh;
+    min-height: 100dvh;
     margin: 0;
-    padding: 12px 16px;
+    padding: 0 16px;
     display: grid;
-    grid-template: "header" auto "chart" auto "readout" auto "panel" minmax(0, 1fr) / minmax(0, 1fr);
-    gap: 10px;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
     background: var(--bg);
     color: var(--fg);
     font: 13px/1.4 var(--mono);
   }
-  header { grid-area: header; display: flex; align-items: baseline; gap: 1.5ch; }
+  #stage {
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px 0;
+    background: var(--bg);
+  }
+  header { display: flex; align-items: baseline; gap: 1.5ch; }
   header .rule,
   h2::after {
     content: "";
@@ -41,10 +51,7 @@
   }
   h1 { margin: 0; font-size: 1.2rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
   header p { margin: 0; color: var(--dim); letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  /* Random overrides every control in the panel, so it sits apart from them */
-  header label { align-self: center; }
-  svg {
-    grid-area: chart;
+  #chart {
     width: 100%;
     aspect-ratio: 640 / 410;
     max-height: 52dvh;
@@ -92,25 +99,32 @@
     fill: var(--bg);
     filter: drop-shadow(0 0 4px rgba(255, 255, 255, calc(0.8 * var(--voice, 0))));
   }
+  /* the vowel's name and formants under the face, on a wide screen */
+  #caption text { fill: var(--fg); text-anchor: middle; dominant-baseline: central; user-select: text; -webkit-user-select: text; cursor: text; }
+  #caption-symbol { font: 28px var(--ipa); }
+  /* sized so the longest name, 31 letters, fits the column on one line */
+  #caption-name { font: 10px var(--mono); }
+  #caption-formants { font: 10px var(--mono); fill: var(--dim); white-space: pre; }
   #dot { fill: #fff; pointer-events: none; filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.9)); }
-  #readout { grid-area: readout; margin: 0; min-height: 1.4em; text-align: center; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; white-space: pre; }
+  /* two lines of fixed height, so a long name never shifts the page */
+  #readout { margin: 0; display: grid; justify-items: center; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+  #readout > span { min-height: 1.5em; white-space: pre; }
+  #readout > span:first-child { display: inline-flex; align-items: baseline; }
+  #symbol { font: 18px/1 var(--ipa); margin-right: 1.5ch; }
+  #formants { color: var(--dim); }
+  /* what is played and whether it sounds */
+  #transport { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
   #panel {
-    grid-area: panel;
     display: flex;
     flex-direction: column;
     gap: 14px;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-gutter: stable;
-    scrollbar-width: thin;
-    scrollbar-color: #333 transparent;
-    padding-top: 12px;
+    padding: 12px 0;
     border-top: 1px solid rgba(255, 255, 255, 0.12);
   }
   section { display: grid; gap: 8px; }
   h2 { display: flex; gap: 1.5ch; margin: 0; font-size: 10px; font-weight: 400; letter-spacing: 0.3em; text-transform: uppercase; color: var(--faint); }
-  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
-  #glides { display: contents; }
+  h2 button { order: 1; }
+  .note { margin: 0; font-size: 11px; letter-spacing: 0.02em; color: var(--faint); }
   label {
     display: inline-flex;
     align-items: center;
@@ -139,17 +153,22 @@
     padding: 2px 6px;
   }
   button {
-    font: 18px var(--ipa);
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
     color: var(--fg);
     background: transparent;
     border: 1px solid var(--rule);
     border-radius: 6px;
-    padding: 2px 10px;
+    padding: 4px 10px;
     cursor: pointer;
     transition: background 0.2s, text-shadow 0.2s;
   }
-  /* a button that is a word, set apart from the IPA symbol buttons */
-  button.word { font: inherit; letter-spacing: inherit; text-transform: inherit; padding: 4px 10px; }
+  button.small { font-size: 10px; padding: 1px 8px; margin: -3px 0; }
+  button:disabled { visibility: hidden; }
+  /* in the title bar, where the open sheet cannot cover it */
+  #more { align-self: center; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+  button[aria-expanded="true"] { background: rgba(255, 255, 255, 0.18); }
   button:hover,
   button:focus-visible { background: rgba(255, 255, 255, 0.12); text-shadow: 0 0 12px rgba(255, 255, 255, 0.6); }
   :focus-visible { outline: 1px solid rgba(255, 255, 255, 0.5); outline-offset: 2px; }
@@ -165,12 +184,68 @@
   }
   #keys { margin: 0; font-size: 11px; letter-spacing: 0.02em; color: var(--dim); }
   @media (min-width: 860px), (orientation: landscape) and (min-width: 620px) {
-    body {
-      grid-template: "header header" auto "chart panel" minmax(0, 1fr) "readout panel" auto / minmax(0, 1fr) 330px;
-      column-gap: 20px;
+    body { grid-template-columns: minmax(0, 1fr) 330px; column-gap: 20px; }
+    /* the chart takes whatever height the rest of the stage leaves */
+    #stage { position: sticky; top: 0; height: 100dvh; grid-template-rows: auto minmax(0, 1fr); }
+    #chart { height: 100%; aspect-ratio: auto; max-height: none; }
+    #panel { align-self: stretch; margin: 12px 0; padding: 0 0 0 20px; border-top: 0; border-left: 1px solid rgba(255, 255, 255, 0.12); }
+    #more, #portrait, #quick, #readout { display: none; }
+  }
+  /* every screen the rule above leaves out */
+  @media (max-width: 859.98px) and (orientation: portrait), (max-width: 619.98px) {
+    #stage { grid-template-columns: 112px minmax(0, 1fr); gap: 6px 12px; padding-top: 8px; }
+    #stage > header, #chart, #quick { grid-column: 1 / -1; }
+    /* app.js appends the transport to the stage, so each row is named */
+    #readout { grid-area: 3 / 2; }
+    #transport { grid-area: 4 / 2; }
+    #quick { grid-row: 5; }
+    #play { display: none; }
+    /* cropped to the frame, which app.js matches in the viewBox */
+    #chart { aspect-ratio: 553 / 405; }
+    .side, #caption { display: none; }
+    #portrait { grid-area: 3 / 1 / span 2; width: 100%; }
+    #mesh { stroke-width: 0.7; stroke-opacity: 0.34; }
+    #nodes { stroke-width: 2; stroke-opacity: 0.6; }
+    #outline { stroke-width: 1.3; stroke-opacity: 0.85; }
+    #features { stroke-width: 1.2; stroke-opacity: 0.9; }
+    #mouth { stroke-width: 1.5; }
+    #readout { justify-items: start; align-self: end; letter-spacing: 0; }
+    #readout > span:first-child { display: grid; gap: 4px; }
+    #readout > span { white-space: normal; }
+    #symbol { font-size: 30px; }
+    /* room for the longest name on two lines */
+    #name { min-height: 2.8em; }
+    #transport { align-self: start; gap: 8px 10px; }
+    #quick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+    #quick .slider { grid-template-columns: auto minmax(0, 1fr); }
+    .note { display: none; }
+    /* The sheet stops under the face, so the chart, the face, and the row
+       beside it stay in view. 228px is the stage down to there, less its
+       chart. It is packed tight so all of it shows on a 390 by 844 phone,
+       and a longer one scrolls by touch with no bar drawn. */
+    #panel section { gap: 2px; }
+    #panel .slider { min-height: 34px; }
+    #speaker h2 { display: none; }
+    #panel {
+      position: fixed;
+      inset: auto 0 0;
+      z-index: 2;
+      max-height: max(38dvh, calc(100dvh - (100vw - 32px) * 0.732 - 228px));
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: none;
+      gap: 10px;
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+      background: #0b0b0d;
+      border-top: 1px solid var(--rule);
+      border-radius: 14px 14px 0 0;
+      box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.8);
+      transform: translateY(100%);
+      visibility: hidden;
+      transition: transform 0.25s ease, visibility 0s 0.25s;
     }
-    svg { height: 100%; aspect-ratio: auto; max-height: none; }
-    #panel { padding: 0 0 0 20px; border-top: 0; border-left: 1px solid rgba(255, 255, 255, 0.12); }
+    #panel::-webkit-scrollbar { display: none; }
+    .open #panel { transform: none; visibility: visible; transition: transform 0.25s ease; }
   }
   @media (max-width: 480px) {
     header p { display: none; }
@@ -182,19 +257,14 @@
     .key { font-size: 12px; transform: translateY(2px); }
     .anchor { r: 4px; }
     #dot { r: 13px; }
-    /* the face grows into the corner under the chart's slanted edge, with heavier lines */
-    #head { transform-origin: 100px 305px; transform: translate(-28px, 5px) scale(1.3); }
-    #mesh { stroke-width: 0.7; stroke-opacity: 0.34; }
-    #nodes { stroke-width: 2; stroke-opacity: 0.6; }
-    #outline { stroke-width: 1.3; stroke-opacity: 0.85; }
-    #features { stroke-width: 1.2; stroke-opacity: 0.9; }
-    #mouth { stroke-width: 1.5; }
   }
   /* fingers need bigger targets than a cursor does */
   @media (pointer: coarse) {
     button, select { min-height: 40px; }
     button { min-width: 44px; }
-    .slider, .row label { min-height: 36px; }
+    button.small { min-height: 30px; }
+    #more { min-height: 32px; }
+    .slider, #transport label { min-height: 36px; }
     #panel { gap: 18px; }
   }
   /* nothing about the keyboard where there is not one */
@@ -202,18 +272,19 @@
     kbd, .key, .keys { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
-    button { transition: none; }
+    button, #panel, .open #panel { transition: none; }
   }
 </style>
 
+<div id="stage">
 <header>
   <h1>Vowels</h1>
   <p>ipa formant synthesizer</p>
   <span class="rule"></span>
-  <label><button id="random" class="word">Random</button> <kbd>/</kbd></label>
+  <button id="more" aria-expanded="false" aria-controls="panel">Sliders</button>
 </header>
 
-<svg id="chart" viewBox="0 15 640 410" role="img" aria-label="IPA vowel chart, press and drag to hear a vowel">
+<svg id="chart" viewBox="-60 15 700 410" role="img" aria-label="IPA vowel chart, press and drag to hear a vowel">
   <polygon class="frame" points="60,50 540,50 540,400 300,400"/>
   <line class="frame" x1="140" y1="166.7" x2="540" y2="166.7"/>
   <line class="frame" x1="220" y1="283.3" x2="540" y2="283.3"/>
@@ -221,8 +292,8 @@
   <text class="axis" x="60" y="30" text-anchor="middle">front</text>
   <text class="axis" x="300" y="30" text-anchor="middle">central</text>
   <text class="axis" x="540" y="30" text-anchor="middle">back</text>
-  <text class="axis" x="578" y="50" dominant-baseline="central">close</text>
-  <text class="axis" x="578" y="400" dominant-baseline="central">open</text>
+  <text class="axis side" x="578" y="50" dominant-baseline="central">close</text>
+  <text class="axis side" x="578" y="400" dominant-baseline="central">open</text>
   <g id="head">
     <path id="mesh"/>
     <path id="nodes"/>
@@ -230,27 +301,35 @@
     <path id="features"/>
     <path id="mouth"/>
   </g>
+  <g id="caption">
+    <text id="caption-symbol" x="45" y="366"></text>
+    <text id="caption-name" x="45" y="387"></text>
+    <text id="caption-formants" x="45" y="404"></text>
+  </g>
   <g id="keycaps"></g>
   <g id="labels"></g>
   <circle id="dot" r="9"/>
 </svg>
 
-<p id="readout"></p>
+<svg id="portrait" viewBox="-11 175 112 172" aria-hidden="true"></svg>
+
+<p id="readout"><span><span id="symbol"></span><span id="name"></span></span><span id="formants"></span></p>
+
+<div id="quick"></div>
+</div>
 
 <div id="panel">
-  <section>
+  <section id="play">
     <h2>Play</h2>
-    <div class="row">
-      <span id="glides"></span>
-    </div>
-    <div class="row">
+    <div id="transport">
       <label><input type="checkbox" id="round"> Rounded <kbd>`</kbd></label>
       <label><input type="checkbox" id="latch"> Hold <kbd>Space</kbd></label>
+      <label><button id="random">Random</button> <kbd>/</kbd></label>
     </div>
   </section>
 
-  <section>
-    <h2>Voice</h2>
+  <section id="speaker">
+    <h2>Speaker</h2>
     <label class="slider"><span class="name">Voice <kbd>\</kbd></span>
       <select id="voice">
         <option value="min">min</option>
@@ -260,7 +339,13 @@
         <option value="max">max</option>
       </select>
     </label>
-    <label class="slider"><span class="name">Phonation <kbd>P</kbd></span>
+    <label class="slider"><span class="name">Pitch <kbd>-</kbd> <kbd>=</kbd></span> <input type="range" id="pitch" min="70" max="320" value="120"> <span id="hz" class="value" data-unit=" Hz">120</span></label>
+    <p class="note">A voice brings its own pitch and leans on the phonation sliders.</p>
+  </section>
+
+  <section>
+    <h2>Phonation <button id="reset" class="small" disabled>Reset</button></h2>
+    <label class="slider"><span class="name">Preset <kbd>P</kbd></span>
       <select id="phonation">
         <option value="modal">modal</option>
         <option value="breathy">breathy</option>
@@ -268,11 +353,6 @@
         <option value="whisper">whisper</option>
       </select>
     </label>
-    <label class="slider"><span class="name">Pitch <kbd>-</kbd> <kbd>=</kbd></span> <input type="range" id="pitch" min="70" max="320" value="120"> <span id="hz" class="value" data-unit=" Hz">120</span></label>
-  </section>
-
-  <section>
-    <h2>Source</h2>
     <label class="slider"><span class="name">Tilt <kbd>[</kbd> <kbd>]</kbd></span> <input type="range" id="tilt" min="0" max="24" step="1" value="3"> <span id="db" class="value" data-unit=" dB">3</span></label>
     <label class="slider"><span class="name">Breath <kbd>;</kbd> <kbd>'</kbd></span> <input type="range" id="breath" min="0" max="0.6" step="0.01" value="0.04"> <span class="value"></span></label>
     <label class="slider"><span class="name">Open quotient</span> <input type="range" id="openQuotient" min="0.2" max="0.8" step="0.01" value="0.5"> <span class="value"></span></label>
@@ -288,6 +368,7 @@
       The small letters on the chart are keys, each plays its spot while held, and two together play the point between them.
       Arrow keys move the dot.
       <kbd>Shift</kbd> with <kbd>\</kbd> or <kbd>P</kbd> steps backward.
+      <kbd>Shift</kbd> with <kbd>/</kbd> or Random also shuffles every setting.
       Holding <kbd>\</kbd>, <kbd>P</kbd>, or <kbd>/</kbd> keeps stepping.
       <kbd>Esc</kbd> silences everything.
     </p>

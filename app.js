@@ -1,8 +1,8 @@
 import {
   BANDWIDTHS,
   clamp,
+  describe,
   formants,
-  GLIDES,
   geo,
   KEY_POS,
   lerp,
@@ -15,13 +15,13 @@ import {
 } from './vowels.js'
 
 const RANDOM_KEY = 'Slash'
-// how long a random sound rings on after its button is let go
+// how long a random sound rings on after it is let go
 const RING = 600
-// a held random key shuffles this often, long enough for a diphthong to land
+// held, random plays again this often, long enough for a glide to land
 const RANDOM_EVERY = 550
 // a random spot is at least this far from the last one, in chart units
 const FAR = 0.3
-// random pitch lands within this many semitones of the voice's own
+// a shuffled pitch lands within this many semitones of the voice's own
 const PITCH_SPREAD = 3
 // a held cycling key steps again this often
 const CYCLE_EVERY = 450
@@ -30,7 +30,12 @@ const SEMITONE = 2 ** (1 / 12)
 
 const chart = document.getElementById('chart')
 const dot = document.getElementById('dot')
-const readout = document.getElementById('readout')
+const readout = Object.fromEntries(
+  ['symbol', 'name', 'formants'].map((id) => [id, document.getElementById(id)])
+)
+const caption = Object.fromEntries(
+  ['symbol', 'name', 'formants'].map((id) => [id, document.getElementById(`caption-${id}`)])
+)
 const pitch = document.getElementById('pitch')
 const tilt = document.getElementById('tilt')
 const breath = document.getElementById('breath')
@@ -61,8 +66,15 @@ function sound(freqs, u, v, label, rounded, smooth = 0.015) {
   const numbers = freqs
     .slice(0, 3)
     .map((f, i) => `F${i + 1} ${Math.round(f)}`)
-    .join('   ')
-  readout.textContent = `${label}   ${numbers}`
+    .join('  ')
+  const name = describe(label)
+  readout.symbol.textContent = label
+  readout.name.textContent = name
+  readout.formants.textContent = numbers
+  // the same again under the face, where a wide screen shows it
+  caption.symbol.textContent = label
+  caption.name.textContent = name
+  caption.formants.textContent = numbers
 }
 
 function svgPoint(event) {
@@ -90,7 +102,7 @@ const keys = []
 // Held keys sound the point midway between them, which reaches the symbols
 // that sit between two rows: T and G make ə, A and Z make æ.
 function chord() {
-  const points = keys.map((code) => (code === RANDOM_KEY ? randomPos : KEY_POS.get(code)))
+  const points = keys.map((code) => KEY_POS.get(code))
   return [0, 1].map((i) => points.reduce((sum, p) => sum + p[i], 0) / points.length)
 }
 
@@ -119,6 +131,8 @@ function follow(event) {
 }
 
 chart.addEventListener('pointerdown', (event) => {
+  // the caption is text to select, not somewhere to play
+  if (event.target.closest('#caption')) return
   wake()
   cancelAnimationFrame(gliding)
   held = true
@@ -177,84 +191,84 @@ const other = (select) => {
   return i
 }
 
-const anyVowel = () => VOWELS[Math.floor(Math.random() * VOWELS.length)]
-
-// Change everything, and never to what it was: another voice, another
-// phonation, the other rounding, and a pitch near the new voice's own. Tilt
-// and breath follow from the presets. Then half the time one vowel, at a
-// spot well away from the last, and half the time a diphthong between any
-// two of the 28 symbols, which is 756 of them.
-function shuffle() {
-  cancelAnimationFrame(gliding)
+// Change every setting, and never to what it was: another voice, another
+// phonation, the other rounding, and a pitch near the new voice's own. The
+// sliders follow from the presets.
+function scramble() {
   voice.selectedIndex = other(voice)
   phonation.selectedIndex = other(phonation)
   round.checked = !round.checked
   const semitones = (Math.random() * 2 - 1) * PITCH_SPREAD
   pitch.value = Math.round(VOICES[voice.value].pitch * SEMITONE ** semitones)
+  applyPresets()
+}
 
+// One random sound: half the time a vowel at a spot well away from the last,
+// and half the time a glide between two symbols of the rounding in force.
+// It is in the voice as set and moves no control, unless everything is asked
+// for, which is Shift.
+function shuffle(everything) {
+  cancelAnimationFrame(gliding)
+  if (everything) scramble()
   if (Math.random() < 0.5) {
     const last = randomPos
     do randomPos = [Math.random(), Math.random()]
     while (Math.hypot(randomPos[0] - last[0], randomPos[1] - last[1]) < FAR)
-    pos = keys.length ? chord() : randomPos
-    applyPresets()
+    pos = randomPos
+    refresh()
     return
   }
 
+  const pool = VOWELS.filter((vowel) => vowel[3] === isRounded())
+  const any = () => pool[Math.floor(Math.random() * pool.length)]
   let from, to
-  do [from, to] = [anyVowel(), anyVowel()]
+  do [from, to] = [any(), any()]
   while (from === to || from[0] + to[0] === lastGlide)
   lastGlide = from[0] + to[0]
-  // start where the glide starts, and leave the key resting where it ends
-  pos = [from[1], from[2]]
   randomPos = [to[1], to[2]]
-  applyPresets()
   glide(lastGlide, from[0], to[0])
 }
 
 // shuffle now, and again on every beat for as long as it is held
-function startRandom() {
+function startRandom(everything) {
   wake()
   cancelAnimationFrame(gliding)
   clearTimeout(ringTimer)
   clearInterval(randomTimer)
-  shuffle()
-  randomTimer = setInterval(shuffle, RANDOM_EVERY)
+  shuffle(everything)
+  randomTimer = setInterval(() => shuffle(everything), RANDOM_EVERY)
 }
 
-const randomButton = document.getElementById('random')
-
-randomButton.addEventListener('pointerdown', (event) => {
-  randomButton.setPointerCapture(event.pointerId)
+// The button and the key do the same thing, down and up. Shift is read when
+// it goes down, for the whole hold.
+function pressRandom(event) {
   randomHeld = true
-  startRandom()
+  startRandom(event.shiftKey)
   voiceOn(true)
-})
+}
 
-function stopRandomButton() {
+// the sound rings on, so a quick tap is still heard whole
+function releaseRandom() {
   randomHeld = false
   clearInterval(randomTimer)
   clearTimeout(ringTimer)
   ringTimer = setTimeout(gate, RING)
 }
 
-randomButton.addEventListener('pointerup', stopRandomButton)
-randomButton.addEventListener('pointercancel', stopRandomButton)
+const randomButton = document.getElementById('random')
+
+randomButton.addEventListener('pointerdown', (event) => {
+  randomButton.setPointerCapture(event.pointerId)
+  pressRandom(event)
+})
+randomButton.addEventListener('pointerup', releaseRandom)
+randomButton.addEventListener('pointercancel', releaseRandom)
 // a click with no pointer behind it came from the keyboard
 randomButton.addEventListener('click', (event) => {
   if (event.detail !== 0) return
-  startRandom()
-  voiceOn(true)
-  stopRandomButton()
+  pressRandom(event)
+  releaseRandom()
 })
-
-const glides = document.getElementById('glides')
-for (const [label, from, to] of GLIDES) {
-  const button = document.createElement('button')
-  button.textContent = label
-  button.addEventListener('click', () => glide(label, from, to))
-  glides.append(button)
-}
 
 function setPitch(hz) {
   pitch.value = hz
@@ -264,11 +278,52 @@ function setPitch(hz) {
   send({ f0 })
 }
 
+// A narrow screen takes the face out of the chart and the one-tap controls
+// out of the panel, and crops the chart to its frame. Each mover leaves a
+// marker at home to come back to. The query is index.html's narrow rule.
+// wider than the chart on the left, which is the face's own column
+const WIDE_BOX = '-60 15 700 410'
+const narrow = matchMedia(
+  '(max-width: 859.98px) and (orientation: portrait), (max-width: 619.98px)'
+)
+const quick = document.getElementById('quick')
+const MOVERS = [
+  [document.getElementById('head'), document.getElementById('portrait')],
+  [document.getElementById('transport'), document.getElementById('stage')],
+  [voice.closest('label'), quick],
+  [phonation.closest('label'), quick]
+].map(([mover, away]) => {
+  const home = document.createComment('')
+  mover.before(home)
+  return [mover, away, home]
+})
+function arrange() {
+  for (const [mover, away, home] of MOVERS) {
+    if (narrow.matches) away.append(mover)
+    else home.after(mover)
+  }
+  chart.setAttribute('viewBox', narrow.matches ? '22 15 553 405' : WIDE_BOX)
+}
+narrow.addEventListener('change', arrange)
+arrange()
+
+// on a narrow screen the panel is a sheet, and this opens and shuts it
+const more = document.getElementById('more')
+more.addEventListener('click', () => {
+  more.setAttribute('aria-expanded', document.body.classList.toggle('open'))
+})
+
+const reset = document.getElementById('reset')
+const SOURCE = [tilt, breath, ...Object.values(fold)]
+let preset = SOURCE.map((slider) => slider.value)
+
 function showSource() {
   document.getElementById('db').textContent = tilt.value
   for (const slider of [breath, ...Object.values(fold)]) {
     slider.nextElementSibling.textContent = slider.value
   }
+  // offered only once a slider has been moved off what the presets set
+  reset.disabled = SOURCE.every((slider, i) => slider.value === preset[i])
 }
 showSource()
 
@@ -292,10 +347,12 @@ function sendSource() {
 
 function applyPresets() {
   const speaker = VOICES[voice.value]
-  const preset = PHONATIONS[phonation.value]
-  tilt.value = preset.tilt + speaker.tilt
-  breath.value = preset.breath + speaker.breath
-  for (const id of FOLD) fold[id].value = preset[id] + (speaker[id] ?? 0)
+  const held = PHONATIONS[phonation.value]
+  tilt.value = held.tilt + speaker.tilt
+  breath.value = held.breath + speaker.breath
+  for (const id of FOLD) fold[id].value = held[id] + (speaker[id] ?? 0)
+  // read back, since a slider rounds what it is given to its own step
+  preset = SOURCE.map((slider) => slider.value)
   setPitch(pitch.value)
   sendSource()
   refresh()
@@ -315,6 +372,7 @@ function setLatch() {
 pitch.addEventListener('input', () => setPitch(pitch.value))
 voice.addEventListener('change', setVoice)
 phonation.addEventListener('change', applyPresets)
+reset.addEventListener('click', applyPresets)
 tilt.addEventListener('input', sendSource)
 breath.addEventListener('input', sendSource)
 for (const id of FOLD) fold[id].addEventListener('input', sendSource)
@@ -352,6 +410,17 @@ const CYCLES = {
   }
 }
 
+function silence() {
+  latch.checked = false
+  clearInterval(cycleTimer)
+  clearInterval(randomTimer)
+  clearTimeout(ringTimer)
+  randomHeld = false
+  keys.length = 0
+  cancelAnimationFrame(gliding)
+  gate()
+}
+
 const ACTIONS = {
   Space() {
     latch.checked = !latch.checked
@@ -379,16 +448,7 @@ const ACTIONS = {
     round.checked = !round.checked
     refresh()
   },
-  Escape() {
-    latch.checked = false
-    clearInterval(cycleTimer)
-    clearInterval(randomTimer)
-    clearTimeout(ringTimer)
-    randomHeld = false
-    keys.length = 0
-    cancelAnimationFrame(gliding)
-    gate()
-  }
+  Escape: silence
 }
 
 window.addEventListener('keydown', (event) => {
@@ -408,13 +468,18 @@ window.addEventListener('keydown', (event) => {
     return
   }
 
-  if (KEY_POS.has(code) || code === RANDOM_KEY) {
+  if (code === RANDOM_KEY) {
+    event.preventDefault()
+    if (!event.repeat) pressRandom(event)
+    return
+  }
+
+  if (KEY_POS.has(code)) {
     event.preventDefault()
     if (event.repeat) return
     wake()
     cancelAnimationFrame(gliding)
     if (!keys.includes(code)) keys.push(code)
-    if (code === RANDOM_KEY) startRandom()
     pos = chord()
     // slower than the pointer, so moving between keys glides
     refresh(0.04)
@@ -442,7 +507,7 @@ window.addEventListener('keydown', (event) => {
 window.addEventListener('keyup', (event) => {
   const { code } = event
   if (code in CYCLES) clearInterval(cycleTimer)
-  if (code === RANDOM_KEY) clearInterval(randomTimer)
+  if (code === RANDOM_KEY) releaseRandom()
   const i = keys.indexOf(code)
   if (i === -1) return
   keys.splice(i, 1)
@@ -486,8 +551,10 @@ ctx.audioWorklet.addModule('synth.js').then(() => {
 // wider. All of it swells and settles on a slow breathing cycle.
 // It is a cartoon of the visible articulators, not a measured model, and
 // the tongue, which does most of the work, cannot be seen from the front.
-const FACE_X = 100,
-  FACE_Y = 305
+const FACE_X = 45,
+  FACE_Y = 258
+// roughly where the narrow layout puts the face, in the chart's coordinates
+const UNDER_CHART = [120, 560]
 // Reduced motion stops the blink, the one movement nobody asked for. The
 // mouth still eases, since it only moves in answer to the controls.
 const still = matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -597,8 +664,10 @@ function faceTarget(now) {
   const brow = (pitch.value - pitch.min) / (pitch.max - pitch.min)
   // the eyes go to the dot while it sounds, and wander after the pointer when idle
   const [lookX, lookY] = !sounding && pointer ? pointer : toXY(u, v)
-  const lookDX = lookX - FACE_X
-  const lookDY = lookY - FACE_Y - EYE_Y
+  // on a narrow screen the face sits under the chart, so it looks up at it
+  const [faceX, faceY] = narrow.matches ? UNDER_CHART : [FACE_X, FACE_Y]
+  const lookDX = lookX - faceX
+  const lookDY = lookY - faceY - EYE_Y
   const reach = Math.hypot(lookDX, lookDY) + GAZE_REACH
   const effort = strain()
   // a square root, so the small breath of an ordinary voice still shows

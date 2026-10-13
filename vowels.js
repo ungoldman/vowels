@@ -187,14 +187,6 @@ export const PHONATIONS = {
   }
 }
 
-export const GLIDES = [
-  ['aɪ', 'a', 'ɪ'],
-  ['aʊ', 'a', 'ʊ'],
-  ['ɔɪ', 'ɔ', 'ɪ'],
-  ['eɪ', 'e', 'ɪ'],
-  ['oʊ', 'o', 'ʊ']
-]
-
 // The four key rows are the four cardinal heights, close at the top, and
 // each runs front to back. The fifth key of a row is the central column.
 export const KEY_ROWS = [

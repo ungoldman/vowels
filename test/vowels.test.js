@@ -6,7 +6,6 @@ import {
   clamp,
   describe,
   formants,
-  GLIDES,
   geo,
   KEY_POS,
   KEY_ROWS,
@@ -139,14 +138,6 @@ test('two keys average to the symbols between rows', () => {
   assert.equal(nearest(...mid('KeyT', 'KeyG'), false), 'ə')
   assert.equal(nearest(...mid('KeyA', 'KeyZ'), false), 'æ')
   assert.equal(nearest(...mid('KeyG', 'KeyB'), false), 'ɐ')
-})
-
-test('the diphthong buttons name real symbols', () => {
-  const symbols = new Set(VOWELS.map(([symbol]) => symbol))
-  for (const [label, from, to] of GLIDES) {
-    assert.ok(symbols.has(from) && symbols.has(to), label)
-    assert.equal(label, from + to)
-  }
 })
 
 test('voices run in pitch order from the bottom of the slider to the top', () => {
