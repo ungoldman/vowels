@@ -31,6 +31,9 @@ const NUDGE = 0.02
 const ARROW_DELAY = 300
 const ARROW_EVERY = 33
 const SEMITONE = 2 ** (1 / 12)
+// formant smoothing for a struck note, slower than the pointer's, so moving
+// from one to the next glides
+const STRUCK = 0.04
 // how long a song takes to slide between vowels, and how much of each note
 // a short one sounds
 const SONG_SLIDE = 110
@@ -47,6 +50,7 @@ const caption = Object.fromEntries(
   ['symbol', 'name', 'formants'].map((id) => [id, document.getElementById(`caption-${id}`)])
 )
 const pitch = document.getElementById('pitch')
+const hzOut = document.getElementById('hz')
 const tilt = document.getElementById('tilt')
 const breath = document.getElementById('breath')
 // the rest of what a phonation sets, each a slider named for its synth parameter
@@ -96,29 +100,42 @@ function svgPoint(event) {
 
 // one position and one voice, driven by the pointer, the keys, or the latch
 let pos = [0.5, 0.5]
-let randomPos = pos
-let ringTimer = 0
-let randomTimer = 0
-let randomHeld = false
-let lastGlide = ''
-let cycleTimer = 0
 // what the face mouths, which trails pos during a glide
 let shape = { u: 0.5, v: 0.5, rounded: 0 }
 let sounding = false
-let held = false
+// the animation frame of a glide or slide in progress
 let gliding = 0
+
+// what holds the voice on: a pointer down on the chart, and the chart keys
+let held = false
+let finger = 0
 const keys = []
-let songVoiced = false
-let songTimers = []
-let cutTimer = 0
-// which of SONGS is up, the beat its current note began on, and whether it
-// is running
+const arrows = new Set()
+let arrowTimer = 0
+let cycleTimer = 0
+
+// the random shuffle
+let randomPos = pos
+let randomHeld = false
+let randomTimer = 0
+let ringTimer = 0
+let lastGlide = ''
+
+// The song player. Which of SONGS is up, the beat its current note began on,
+// whether it is running, and whether the tune is on a note or a rest.
 let songIndex = 0
 let songBeat = 0
 let songPlaying = false
+let songVoiced = false
+let songTimers = []
+let cutTimer = 0
+// the pitch and rounding to put back when the song ends, set while one is loaded
+let songBefore = null
+// the same, with the timer that will put them back, just after a song ends
+let songAfter = null
 // The two voices that join in on a song, a bass and a middle voice, each
-// with a synth and a head of its own. The mix drops while they sing so three
-// voices do not clip.
+// with a synth and a head of its own. The mix drops while a song is loaded
+// so three voices do not clip.
 const choir = [VOICES.min, VOICES.low].map(({ scale }) => ({
   scale,
   node: null,
@@ -129,12 +146,6 @@ const choir = [VOICES.min, VOICES.low].map(({ scale }) => ({
 const CHOIR_GAIN = 0.6
 const SONG_GAIN = 0.5
 let master
-// the pitch and rounding to put back when the song ends, set while it plays
-let songBefore = null
-// the same, with the timer that will put them back, just after a song ends
-let songAfter = null
-const arrows = new Set()
-let arrowTimer = 0
 
 // Held keys sound the point midway between them, which reaches the symbols
 // that sit between two rows: T and G make ə, A and Z make æ.
@@ -147,6 +158,11 @@ function chord() {
 const voiced = (u, v, rounded) => formants(u, v, rounded, VOICES[voice.value].scale)
 
 const isRounded = () => round.checked
+const vowelOf = (symbol) => VOWELS.find(([other]) => other === symbol)
+// where a pitch sits on the slider, 0 to 1, which is how high the brows go
+const browOf = (hz) => clamp((hz - pitch.min) / (pitch.max - pitch.min))
+// ease in and out, 0 to 1
+const ease = (t) => t * t * (3 - 2 * t)
 
 function refresh(smooth) {
   const rounded = isRounded()
@@ -204,16 +220,15 @@ const SLIDE = 260
 function glide(label, from, to) {
   wake()
   cancelAnimationFrame(gliding)
-  const [, u0, v0, r0] = VOWELS.find(([symbol]) => symbol === from)
-  const [, u1, v1, r1] = VOWELS.find(([symbol]) => symbol === to)
+  const [, u0, v0, r0] = vowelOf(from)
+  const [, u1, v1, r1] = vowelOf(to)
   const f0 = voiced(u0, v0, r0)
   const f1 = voiced(u1, v1, r1)
   pos = [u1, v1]
   const start = performance.now()
   voiceOn(true)
   const step = (now) => {
-    const t = clamp((now - start - HOLD) / TRAVEL)
-    const eased = t * t * (3 - 2 * t)
+    const eased = ease(clamp((now - start - HOLD) / TRAVEL))
     sound(
       f0.map((f, i) => geo(f, f1[i], eased)),
       lerp(u0, u1, eased),
@@ -235,8 +250,7 @@ function slide(to, ms = SLIDE) {
   const start = performance.now()
   const step = (now) => {
     const t = clamp((now - start) / ms)
-    const eased = t * t * (3 - 2 * t)
-    pos = [0, 1].map((i) => lerp(from[i], to[i], eased))
+    pos = [0, 1].map((i) => lerp(from[i], to[i], ease(t)))
     refresh()
     if (t < 1) gliding = requestAnimationFrame(step)
   }
@@ -246,13 +260,15 @@ function slide(to, ms = SLIDE) {
 const songButton = document.getElementById('song')
 const player = document.getElementById('player')
 const pauseButton = document.getElementById('pause')
+const nowPlaying = document.getElementById('now')
+const faces = document.getElementById('head')
 
 // the deck beside the button shows only while a song is loaded
 function showSong() {
   player.classList.toggle('playing', songBefore !== null)
-  document.getElementById('head').classList.toggle('singing', songBefore !== null)
+  faces.classList.toggle('singing', songBefore !== null)
   songButton.setAttribute('aria-pressed', songBefore !== null)
-  document.getElementById('now').textContent = SONGS[songIndex].title
+  nowPlaying.textContent = SONGS[songIndex].title
   for (const [i, item] of [...tracks.children].entries()) {
     item.setAttribute('aria-current', songBefore !== null && i === songIndex)
   }
@@ -269,8 +285,28 @@ function choirTune(singer) {
   singer.node?.port.postMessage({
     formants: formants(u, v, rounded, singer.scale),
     bandwidths: BANDWIDTHS,
-    smooth: 0.04
+    smooth: STRUCK
   })
+}
+
+// a choir voice takes up a spot on the chart and a pitch
+function choirNote(singer, u, v, hz) {
+  singer.sounding = true
+  singer.shape = { u, v, rounded: 0 }
+  singer.brow = browOf(hz)
+  choirTune(singer)
+  singer.node?.port.postMessage({ on: true, f0: hz })
+}
+
+// one of the choir takes a note of a song, or falls quiet on a rest or on nothing
+function choirSing(singer, note) {
+  if (!note?.hz) {
+    singer.sounding = false
+    singer.node?.port.postMessage({ on: false })
+    return
+  }
+  const [, u, v] = vowelOf(note.symbol)
+  choirNote(singer, u, v, note.hz * PHONATIONS[phonation.value].pitch)
 }
 
 // While a song is paused the choir is still there, and it joins in with
@@ -287,27 +323,9 @@ function accompany() {
       if (singer.sounding) choirSing(singer)
       return
     }
-    const hz = f0 * UNDER[i] * (f0 * UNDER[i] < pitch.min ? 2 : 1)
-    singer.sounding = true
-    singer.shape = { u: pos[0], v: pos[1], rounded: 0 }
-    singer.brow = clamp((hz - pitch.min) / (pitch.max - pitch.min))
-    choirTune(singer)
-    singer.node?.port.postMessage({ on: true, f0: hz })
+    const hz = f0 * UNDER[i]
+    choirNote(singer, ...pos, hz < pitch.min ? hz * 2 : hz)
   })
-}
-
-// one of the choir takes a note, or falls quiet on a rest or on nothing
-function choirSing(singer, note) {
-  singer.sounding = Boolean(note?.hz)
-  if (!singer.sounding) {
-    singer.node?.port.postMessage({ on: false })
-    return
-  }
-  const [, u, v] = VOWELS.find(([symbol]) => symbol === note.symbol)
-  singer.shape = { u, v, rounded: 0 }
-  singer.brow = clamp((note.hz - pitch.min) / (pitch.max - pitch.min))
-  choirTune(singer)
-  singer.node?.port.postMessage({ on: true, f0: note.hz * PHONATIONS[phonation.value].pitch })
 }
 
 // stop the notes and keep the place
@@ -347,11 +365,11 @@ function stopSong() {
   showSong()
 }
 
-// Sing one of SONGS from a given beat, and the ones after it in turn, the
-// tune in the page's own voice and the two harmony parts in the choir's. Every note is timed from the start
-// so the beat cannot drift and the parts stay together. Notes of the tune in
-// one breath slide from vowel to vowel, and a note after a rest starts on its
-// vowel.
+// Sing one of SONGS from a given beat, and the ones after it in turn. The
+// tune is in the page's own voice and the two harmony parts in the choir's.
+// Every note is timed from the start, so the beat cannot drift and the parts
+// stay together. Notes of the tune in one breath slide from vowel to vowel,
+// and a note after a rest starts on its vowel.
 function playSong(index, from = 0) {
   pauseSong()
   wake()
@@ -398,14 +416,14 @@ function playSong(index, from = 0) {
     }
     songBeat = at
     if (note.hz) {
-      const [, u, v, rounded] = VOWELS.find(([symbol]) => symbol === note.symbol)
+      const [, u, v, rounded] = vowelOf(note.symbol)
       setPitch(note.hz)
       round.checked = rounded
       if (songVoiced) slide([u, v], SONG_SLIDE)
       else {
         cancelAnimationFrame(gliding)
         pos = [u, v]
-        refresh(0.04)
+        refresh(STRUCK)
       }
       if (short) {
         cutTimer = setTimeout(
@@ -578,7 +596,7 @@ function setPitch(hz) {
   pitch.value = hz
   // creaky sounds below the slider, so the readout is what is heard
   const f0 = Number(pitch.value) * PHONATIONS[phonation.value].pitch
-  document.getElementById('hz').textContent = Math.round(f0)
+  hzOut.textContent = Math.round(f0)
   send({ f0 })
   accompany()
 }
@@ -603,14 +621,15 @@ chart.addEventListener(
 // A narrow screen takes the face out of the chart and the one-tap controls
 // out of the panel, and crops the chart to its frame. Each mover leaves a
 // marker at home to come back to. The query is index.html's narrow rule.
-// wider than the chart on the left, which is the face's own column
+// The wide box runs past the chart on the left, where the faces are.
 const WIDE_BOX = '-60 15 700 410'
+const NARROW_BOX = '22 15 553 405'
 const narrow = matchMedia(
   '(max-width: 859.98px) and (orientation: portrait), (max-width: 619.98px)'
 )
 const quick = document.getElementById('quick')
 const MOVERS = [
-  [document.getElementById('head'), document.getElementById('portrait')],
+  [faces, document.getElementById('portrait')],
   [document.getElementById('transport'), document.getElementById('stage')],
   [voice.closest('label'), quick],
   [phonation.closest('label'), quick]
@@ -624,7 +643,7 @@ function arrange() {
     if (narrow.matches) away.append(mover)
     else home.after(mover)
   }
-  chart.setAttribute('viewBox', narrow.matches ? '22 15 553 405' : WIDE_BOX)
+  chart.setAttribute('viewBox', narrow.matches ? NARROW_BOX : WIDE_BOX)
 }
 narrow.addEventListener('change', arrange)
 arrange()
@@ -846,8 +865,7 @@ window.addEventListener('keydown', (event) => {
     if (keys.length > 1) slide(chord())
     else {
       pos = chord()
-      // slower than the pointer, so moving between keys glides
-      refresh(0.04)
+      refresh(STRUCK)
     }
     gate()
     return
@@ -994,7 +1012,7 @@ function sideHead(side) {
     'transform',
     `translate(${FACE_X + side * SIDE_X} ${FACE_Y + SIDE_Y}) scale(${SIDE_SCALE}) translate(${-FACE_X} ${-FACE_Y})`
   )
-  document.getElementById('head').prepend(group)
+  faces.prepend(group)
   return Object.fromEntries(
     HEAD_PATHS.map((name) => {
       const path = document.createElementNS(SVG, 'path')
@@ -1209,7 +1227,7 @@ function drawHead({ paths, face, speed, yaw, singer }, now, dt) {
     singer ?? {
       shape,
       sounding,
-      brow: (pitch.value - pitch.min) / (pitch.max - pitch.min)
+      brow: browOf(pitch.value)
     }
   )
   // A critically damped spring per value, solved exactly so a long frame

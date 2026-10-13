@@ -22,10 +22,10 @@
     --mono: ui-monospace, Menlo, Consolas, monospace;
     --ipa: "Charis SIL", "Doulos SIL", "Gentium Plus", serif;
   }
-  /* On a wide screen the stage (title, chart, readout, transport) stays in
-     view with the panel a full-height column beside it. On a narrow one the
-     face leaves the chart for a row of its own, the one-tap controls sit
-     beside and under it, and the sliders are a sheet that slides up from the bottom.
+  /* On a wide screen the stage (title and chart) stays in view with the
+     panel a full-height column beside it. On a narrow one the face leaves
+     the chart for a row of its own, the one-tap controls sit beside and
+     under it, and the sliders are a sheet that slides up from the bottom.
      app.js moves the face and those controls when the layout changes. */
   body {
     box-sizing: border-box;
@@ -178,15 +178,14 @@
   }
   button.small { font-size: 10px; padding: 1px 8px; margin: -3px 0; }
   button:disabled { visibility: hidden; }
-  /* in the title bar, where the open sheet cannot cover it */
   /* the song button, with a deck beside it that shows while a song is loaded */
   #player { display: flex; align-items: center; gap: 6px; }
   #player:not(.playing) > :not(#song) { display: none; }
   #player button { margin: 0; }
   #now { min-width: 0; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; letter-spacing: 0.04em; color: var(--dim); }
-  #song { opacity: 0.65; }
+  /* a long press opens the song list, so the press must not select or call up a menu */
+  #song { opacity: 0.65; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   #song:hover, #song:focus-visible, #song[aria-pressed="true"] { opacity: 1; }
-  #song { touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   /* a link at the foot of the panel, and the sheet of credits it opens */
   #credit { align-self: flex-end; margin-top: auto; padding: 0; border: 0; font-size: 10px; letter-spacing: 0; color: var(--dim); text-decoration: underline; text-underline-offset: 3px; }
   #credit:hover, #credit:focus-visible { color: var(--fg); background: none; }
@@ -204,6 +203,7 @@
   #tracks button { border: 0; border-radius: 4px; padding: 5px 10px; text-align: left; }
   #tracks button[aria-current="true"] { background: rgba(255, 255, 255, 0.18); }
   #song:hover, #song:focus-visible, #song[aria-pressed="true"] { opacity: 1; }
+  /* in the title bar, where the open sheet cannot cover it */
   #more { align-self: center; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
   button[aria-expanded="true"] { background: rgba(255, 255, 255, 0.18); }
   button:hover,

@@ -290,19 +290,24 @@ const score = (text) =>
 
 // fold a pitch by octaves into the octave that starts at low
 const fold = (hz, low) => hz * 2 ** -Math.floor(Math.log2(hz / low))
+// The bass keeps to the octave from D2. The middle voice keeps between G2
+// and G#3 when it picks its own notes.
+const BASS_LOW = 73
+const MID_LOW = 98
+const MID_HIGH = 208
 // a part takes its second vowel when a note repeats, so the note is heard again
 const turn = (part, hz, [first, second]) =>
   part.at(-1)?.hz === hz && part.at(-1).symbol === first ? second : first
 
 // The chord tone for the middle voice that lies nearest its last note, so it
 // keeps a note two chords share and otherwise moves by the smallest step.
-// It sings thirds and fifths between G2 and G#3, and leaves roots to the bass.
+// It sings thirds and fifths, and leaves roots to the bass.
 function nearestTone(root, third, last, skip) {
   let best
   for (const step of [third, 7]) {
     for (const octave of [0.5, 1, 2]) {
       const hz = root * octave * 2 ** (step / 12)
-      if (hz < 98 || hz > 208 || hz === skip) continue
+      if (hz < MID_LOW || hz > MID_HIGH || hz === skip) continue
       if (!best || Math.abs(Math.log(hz / last)) < Math.abs(Math.log(best / last))) best = hz
     }
   }
@@ -310,12 +315,12 @@ function nearestTone(root, third, last, skip) {
 }
 
 // The chord's note a minor third or more under a note of the tune, as near
-// it as the chord allows, for singing along below it. Never under G2, so
-// under a very low note it comes out above.
+// it as the chord allows, for singing along below it. Never under the middle
+// voice's floor, so under a very low note it comes out above.
 function under(root, third, hz) {
   const tones = [0, third, 7]
     .flatMap((step) => [1, 2, 4].map((octave) => root * octave * 2 ** (step / 12)))
-    .filter((tone) => tone >= 98)
+    .filter((tone) => tone >= MID_LOW)
   const below = tones.filter((tone) => tone <= hz / 2 ** (3 / 12) + 1e-9)
   return below.length ? Math.max(...below) : Math.min(...tones)
 }
@@ -338,7 +343,7 @@ export function harmony(text, tune = []) {
       const [name, length] = token.split('/')
       const minor = name.endsWith('m')
       return {
-        root: name === '-' ? 0 : fold(noteHz(`${minor ? name.slice(0, -1) : name}4`), 73),
+        root: name === '-' ? 0 : fold(noteHz(`${minor ? name.slice(0, -1) : name}4`), BASS_LOW),
         third: minor ? 3 : 4,
         beats: Number(length)
       }
@@ -392,7 +397,7 @@ export function harmony(text, tune = []) {
       } else {
         // the bass moves to the fifth
         low(root, beats / 2)
-        low(fold(root * 2 ** (7 / 12), 73), beats / 2)
+        low(fold(root * 2 ** (7 / 12), BASS_LOW), beats / 2)
         high(tone, beats)
       }
     } else {
@@ -407,14 +412,21 @@ export function harmony(text, tune = []) {
   return { bass, mid }
 }
 
-// Songs for the one voice, a bar to a line, with the length of a beat in ms.
-// Each keeps to what the synth can sing: every note is on the pitch slider
-// and sits under its vowel's F1, so the high notes take open vowels, as a
-// singer's do. A short song cuts every note off early. All are old tunes,
-// most of them ones that early video games borrowed, each in a key that fits
-// the slider.
+// A bass and a middle part given note by note, with parts from harmony to
+// follow them if there are any.
+const parts = (bass, mid, rest = { bass: [], mid: [] }) => ({
+  bass: [...score(bass), ...rest.bass],
+  mid: [...score(mid), ...rest.mid]
+})
+
+// The songs, in the order they play. A tune is written a bar to a line, with
+// the length of a beat in ms. Each keeps to what the synth can sing: every
+// note is on the pitch slider and sits under its vowel's F1, so the high
+// notes take open vowels, as a singer's do. A short song cuts every note off
+// early. All are old tunes in the public domain, each in a key that fits the
+// slider.
 // The chords are for the two voices that join in, see harmony. A song can
-// give those two parts note by note instead.
+// give those two parts note by note instead, see parts.
 export const SONGS = [
   // Korobeiniki, a Russian folk song, the tune twice. Each note is sung on the
   // vowel of its syllable in the first verse of the Russian words, fitted to
@@ -452,12 +464,8 @@ export const SONGS = [
   // goes back to harmony from the chords.
   {
     title: 'Blue Danube',
-    chords: ((answers, close) => ({
-      bass: [...score(answers[0]), ...close.bass],
-      mid: [...score(answers[1]), ...close.mid]
-    }))(
-      [
-        `
+    chords: parts(
+      `
         -/1
         -/5 A3/1/ə A3/2/e F3/1/ə F3/2/e -/1
         -/5 Bb3/1/ə Bb3/2/e E3/1/ə E3/2/e -/1
@@ -465,8 +473,8 @@ export const SONGS = [
         -/5 A3/1/ə A3/2/e F3/1/ə F3/2/e -/1
         -/5 C4/1/ə C4/2/e A3/1/ə A3/2/e -/1
         -/5 D4/1/ə D4/2/e Bb3/1/ə Bb3/2/e -/1
-        `,
-        `
+      `,
+      `
         -/1
         -/5 C4/1/ə C4/2/e A3/1/ə A3/2/e -/1
         -/5 C4/1/ə C4/2/e Bb3/1/ə Bb3/2/e -/1
@@ -474,8 +482,7 @@ export const SONGS = [
         -/5 D4/1/ə D4/2/e A3/1/ə A3/2/e -/1
         -/5 F4/1/ə F4/2/e C4/1/ə C4/2/e -/1
         -/5 F4/1/ə F4/2/e D4/1/ə D4/2/e -/1
-        `
-      ],
+      `,
       harmony('Gm/3 C/3 C/3 F/3 F/3 Bb/3 C/3 F/3 F/1')
     ),
     beat: 330,
@@ -802,8 +809,8 @@ export const SONGS = [
   // page's voice goes round to its start again while the other catches up.
   {
     title: 'Canon',
-    chords: {
-      bass: score(`
+    chords: parts(
+      `
         Bb2/1/o F2/1/u G2/1/o D2/1/u
         Eb2/1/o Bb2/1/u Eb2/1/o F2/1/u
         Bb2/1/o F2/1/u G2/1/o D2/1/u
@@ -815,8 +822,8 @@ export const SONGS = [
         Bb2/1/o F2/1/u G2/1/o D2/1/u
         Eb2/1/o Bb2/1/u Eb2/1/o F2/1/u
         Bb2/4/o
-      `),
-      mid: score(`
+      `,
+      `
         -/16
         D4/1/ə C4/1/ə Bb3/1/ə A3/1/ə
         G3/1/ə F3/1/ə G3/1/ə A3/1/ə
@@ -825,8 +832,8 @@ export const SONGS = [
         Bb2/.5/ə D3/.5/ə F3/.5/ə Eb3/.5/ə D3/.5/ə Bb2/.5/ə D3/.5/ə C3/.5/ə
         Bb2/.5/ə G2/.5/ə Bb2/.5/ə F3/.5/ə Eb3/.5/ə G3/.5/ə F3/.5/ə Eb3/.5/ə
         D3/4/ə
-      `)
-    },
+      `
+    ),
     beat: 650,
     tune: `
       -/8
