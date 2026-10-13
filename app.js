@@ -26,6 +26,9 @@ const PITCH_SPREAD = 3
 // a held cycling key steps again this often
 const CYCLE_EVERY = 450
 const NUDGE = 0.02
+// a held arrow waits this long, then nudges again this often
+const ARROW_DELAY = 300
+const ARROW_EVERY = 33
 const SEMITONE = 2 ** (1 / 12)
 
 const chart = document.getElementById('chart')
@@ -98,6 +101,8 @@ let sounding = false
 let held = false
 let gliding = 0
 const keys = []
+const arrows = new Set()
+let arrowTimer = 0
 
 // Held keys sound the point midway between them, which reaches the symbols
 // that sit between two rows: T and G make ə, A and Z make æ.
@@ -393,6 +398,17 @@ const ARROWS = {
   ArrowDown: [0, NUDGE]
 }
 
+// Held arrows add up, so two at right angles move the dot diagonally and two
+// opposed hold it still. The page repeats them itself, since the system's
+// own key repeat only ever repeats the last key pressed.
+function nudge(codes) {
+  for (const code of codes) {
+    const [du, dv] = ARROWS[code]
+    pos = [clamp(pos[0] + du), clamp(pos[1] + dv)]
+  }
+  refresh()
+}
+
 // keys that step through a menu, and keep stepping while held
 const step = (select, by) => {
   select.selectedIndex = (select.selectedIndex + by + select.length) % select.length
@@ -489,10 +505,17 @@ window.addEventListener('keydown', (event) => {
 
   if (code in ARROWS) {
     event.preventDefault()
+    if (event.repeat) return
     wake()
-    const [du, dv] = ARROWS[code]
-    pos = [clamp(pos[0] + du), clamp(pos[1] + dv)]
-    refresh()
+    nudge([code])
+    // an arrow joining others already moving skips the wait
+    if (!arrows.size) {
+      const down = performance.now()
+      arrowTimer = setInterval(() => {
+        if (performance.now() - down > ARROW_DELAY) nudge(arrows)
+      }, ARROW_EVERY)
+    }
+    arrows.add(code)
     return
   }
 
@@ -508,6 +531,7 @@ window.addEventListener('keyup', (event) => {
   const { code } = event
   if (code in CYCLES) clearInterval(cycleTimer)
   if (code === RANDOM_KEY) releaseRandom()
+  if (arrows.delete(code) && !arrows.size) clearInterval(arrowTimer)
   const i = keys.indexOf(code)
   if (i === -1) return
   keys.splice(i, 1)
@@ -522,6 +546,8 @@ window.addEventListener('keyup', (event) => {
 window.addEventListener('blur', () => {
   clearInterval(cycleTimer)
   clearInterval(randomTimer)
+  clearInterval(arrowTimer)
+  arrows.clear()
   randomHeld = false
   keys.length = 0
   held = false
