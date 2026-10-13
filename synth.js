@@ -15,6 +15,10 @@ const GAIN = 0.35
 // Klatt's flutter: three slow sines that never line up, in place of vibrato
 const FLUTTER = 0.25
 const FLUTTER_RATES = [12.7, 7.1, 4.7]
+// The pitch also wanders at random below this rate, and a note takes this
+// long to settle onto its pitch. Both are guesses.
+const DRIFT_HZ = 1.5
+const SETTLE = 0.06
 // tilt is specified as attenuation at this frequency
 const TILT_AT = 3000
 // noise is this much quieter while the glottis is closed
@@ -78,6 +82,10 @@ export class VowelSynth {
       shimmer: 0.035,
       // how far every other pulse is weakened, the rattle of creaky voice
       diplophonia: 0,
+      // spread of the slow wander in pitch, as a share of the pitch
+      drift: 0.005,
+      // how far under its pitch a note starts, and falls back as it ends
+      scoop: 0.05,
       // Hz added to the F1 bandwidth while the glottis is open, since an
       // open glottis lets energy leak down into the lungs
       openBandwidth: 0,
@@ -92,6 +100,8 @@ export class VowelSynth {
     this.level = 0
     this.phase = 0
     this.time = 0
+    this.wander = [0, 0]
+    this.settle = 0
     this.tiltB = 0
     this.tiltY = 0
     this.periodRate = 1
@@ -139,9 +149,18 @@ export class VowelSynth {
       1 + (FLUTTER / 50) * FLUTTER_RATES.reduce((sum, hz) => sum + Math.sin(hz * w), 0)
     this.time += n / rate
 
+    // white noise through two one-pole low-passes, scaled back to unit spread
+    const a = Math.exp((-TWO_PI * DRIFT_HZ * n) / rate)
+    const white = (Math.random() * 2 - 1) * Math.sqrt(3)
+    const unit = Math.sqrt((1 - a * a) ** 3 / (1 + a * a)) / (1 - a) ** 2
+    this.wander[0] += (white * unit - this.wander[0]) * (1 - a)
+    this.wander[1] += (this.wander[0] - this.wander[1]) * (1 - a)
+    const drift = 1 + target.drift * this.wander[1]
+
     const glideK = 1 - Math.exp(-1 / (GLIDE * rate))
     const goal = target.on ? 1 : 0
     const levelK = 1 - Math.exp(-1 / ((target.on ? ATTACK : RELEASE) * rate))
+    const settleK = 1 - Math.exp(-1 / (SETTLE * rate))
     const oq = target.openQuotient
     // with no voicing the glottis never closes, as in a whisper
     const whisper = target.voicing === 0
@@ -150,7 +169,9 @@ export class VowelSynth {
       this.f0 += (target.f0 - this.f0) * glideK
       this.voicing += (target.voicing - this.voicing) * glideK
       this.level += (goal - this.level) * levelK
-      const dt = (this.f0 * flutter * this.periodRate) / rate
+      this.settle += (goal - this.settle) * settleK
+      const scoop = 1 - target.scoop * (1 - this.settle)
+      const dt = (this.f0 * flutter * drift * scoop * this.periodRate) / rate
       this.phase += dt
       if (this.phase >= 1) {
         this.phase -= 1

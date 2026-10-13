@@ -26,7 +26,7 @@ function level(x, hz) {
 }
 
 // a steady voice with no wobble or noise, so harmonics sit on exact multiples
-const steady = { on: true, breath: 0, jitter: 0, shimmer: 0 }
+const steady = { on: true, breath: 0, jitter: 0, shimmer: 0, drift: 0 }
 
 test('it is silent until switched on', () => {
   assert.equal(peak(render(new VowelSynth(RATE), 50)), 0)
@@ -146,6 +146,41 @@ test('the formants above F5 fill in the top of the spectrum', () => {
   }
   const five = [500, 1500, 2500, 3300, 3750]
   assert.ok(top([...five, 4900, 5900, 6900, 7900, 8900]) > top(five) + 12)
+})
+
+test('the pitch wanders a little, and not at all when told not to', () => {
+  const synth = new VowelSynth(RATE)
+  synth.set({ on: true })
+  render(synth, 400)
+  assert.ok(synth.wander[1] !== 0 && Math.abs(synth.wander[1]) < 10)
+  // with no wobble of any kind the pitch is exact, so a harmonic stays put
+  const still = new VowelSynth(RATE)
+  still.set({ ...steady, f0: 100 })
+  render(still, 200)
+  const x = render(still, 750)
+  assert.ok(level(x, 2000) > level(x, 2020) + 6)
+})
+
+test('a note starts under its pitch, settles, and falls as it ends', () => {
+  // count pulses by the flips of the alternate-pulse flag
+  const pulses = (synth, blocks) => {
+    let count = 0
+    for (let b = 0; b < blocks; b++) {
+      const was = synth.odd
+      render(synth, 1)
+      if (synth.odd !== was) count++
+    }
+    return count
+  }
+  const synth = new VowelSynth(RATE)
+  synth.set({ ...steady, f0: 300, scoop: 0.3 })
+  const early = pulses(synth, 30)
+  render(synth, 400)
+  assert.ok(Math.abs(synth.settle - 1) < 1e-3)
+  const settled = pulses(synth, 30)
+  synth.set({ on: false })
+  const late = pulses(synth, 30)
+  assert.ok(early < settled && late < settled, `${early} ${settled} ${late}`)
 })
 
 test('a formant above half the sample rate is left out', () => {

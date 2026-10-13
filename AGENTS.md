@@ -25,6 +25,7 @@ These have no source and were set by reasoning, not by ear or measurement:
 
 - F3 for every vowel. Catford gives F1 and F2 only.
 - The four formants above F6 and their bandwidths. Klatt stops at F6.
+- The slow drift in pitch, and the scoop in pitch as a note starts and ends.
 - The twelve symbols that are not cardinal vowels, which are positions interpolated between the sixteen that are.
 - The `min` and `max` voice scales, every voice's pitch, and each phonation's tilt, breath, and roughness.
 - The face, which is a cartoon of the visible articulators.
