@@ -406,12 +406,16 @@ function playSong(index, from = 0) {
     if (note.hz) {
       const [, u, v, rounded] = vowelOf(note.symbol)
       setPitch(note.hz)
-      round.checked = rounded
-      if (songVoiced) slide([u, v], SONG_SLIDE)
-      else {
-        cancelAnimationFrame(gliding)
-        pos = [u, v]
-        refresh(STRUCK)
+      // A key or pointer held on the chart keeps the vowel. The tune goes on
+      // in pitch only, and takes the vowel back at the next note after release.
+      if (!held && !keys.length) {
+        round.checked = rounded
+        if (songVoiced) slide([u, v], SONG_SLIDE)
+        else {
+          cancelAnimationFrame(gliding)
+          pos = [u, v]
+          refresh(STRUCK)
+        }
       }
       if (short) {
         cutTimer = setTimeout(
