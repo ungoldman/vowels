@@ -16,29 +16,27 @@ import {
 } from './vowels.js'
 
 const RANDOM_KEY = 'Slash'
-// how long a random sound rings on after it is let go
+// ms a random sound rings on after release
 const RING = 600
-// held, random plays again this often, long enough for a glide to land
+// ms between random sounds while held, enough for a glide to land
 const RANDOM_EVERY = 550
-// a random spot is at least this far from the last one, in chart units
+// least distance between random spots, in chart units
 const FAR = 0.3
-// a shuffled pitch lands within this many semitones of the voice's own
+// semitones a shuffled pitch may stray from the voice's own
 const PITCH_SPREAD = 3
-// a held cycling key steps again this often
+// ms between steps of a held cycling key
 const CYCLE_EVERY = 450
 const NUDGE = 0.02
-// a held arrow waits this long, then nudges again this often
+// ms a held arrow waits, then ms between nudges
 const ARROW_DELAY = 300
 const ARROW_EVERY = 33
 const SEMITONE = 2 ** (1 / 12)
-// formant smoothing for a struck note, slower than the pointer's, so moving
-// from one to the next glides
+// smoothing for a struck note, slow enough that key to key glides
 const STRUCK = 0.04
-// how long a song takes to slide between vowels, and how much of each note
-// a short one sounds
+// ms a song slides between vowels, and the share of a note a short song sounds
 const SONG_SLIDE = 110
 const SONG_CUT = 0.6
-// the quiet between one song and the next, in ms
+// ms of quiet between songs
 const SONG_GAP = 2000
 
 const chart = document.getElementById('chart')
@@ -53,7 +51,7 @@ const pitch = document.getElementById('pitch')
 const hzOut = document.getElementById('hz')
 const tilt = document.getElementById('tilt')
 const breath = document.getElementById('breath')
-// the rest of what a phonation sets, each a slider named for its synth parameter
+// the rest of a phonation's settings, each slider named for its synth parameter
 const FOLD = ['openQuotient', 'voicing', 'rough', 'diplophonia', 'openBandwidth']
 const fold = Object.fromEntries(FOLD.map((id) => [id, document.getElementById(id)]))
 const round = document.getElementById('round')
@@ -61,16 +59,14 @@ const latch = document.getElementById('latch')
 const voice = document.getElementById('voice')
 const phonation = document.getElementById('phonation')
 
-// The synthesizer runs in an audio worklet, see synth.js. The context stays
-// suspended until the first gesture.
+// synth.js runs in an audio worklet. The context is suspended until a gesture.
 const ctx = new AudioContext()
 let synth
 
 const send = (params) => synth?.port.postMessage(params)
 const wake = () => ctx.resume()
 
-// rounded is 0 to 1, so a glide between a spread and a rounded vowel can
-// pass through the shapes in between
+// rounded runs 0 to 1, so a glide can pass through the lip shapes between
 function sound(freqs, u, v, label, rounded, smooth = 0.015) {
   send({ formants: freqs, bandwidths: BANDWIDTHS, smooth })
   shape = { u, v, rounded }
@@ -85,7 +81,6 @@ function sound(freqs, u, v, label, rounded, smooth = 0.015) {
   readout.symbol.textContent = label
   readout.name.textContent = name
   readout.formants.textContent = numbers
-  // the same again under the face, where a wide screen shows it
   caption.symbol.textContent = label
   caption.name.textContent = name
   caption.formants.textContent = numbers
@@ -98,15 +93,15 @@ function svgPoint(event) {
   return [p.x, p.y]
 }
 
-// one position and one voice, driven by the pointer, the keys, or the latch
+// one position and one voice, driven by pointer, keys, or latch
 let pos = [0.5, 0.5]
 // what the face mouths, which trails pos during a glide
 let shape = { u: 0.5, v: 0.5, rounded: 0 }
 let sounding = false
-// the animation frame of a glide or slide in progress
+// frame id of a glide or slide in progress
 let gliding = 0
 
-// what holds the voice on: a pointer down on the chart, and the chart keys
+// what holds the voice on: a pointer on the chart, and the chart keys
 let held = false
 let finger = 0
 const keys = []
@@ -114,28 +109,26 @@ const arrows = new Set()
 let arrowTimer = 0
 let cycleTimer = 0
 
-// the random shuffle
 let randomPos = pos
 let randomHeld = false
 let randomTimer = 0
 let ringTimer = 0
 let lastGlide = ''
 
-// The song player. Which of SONGS is up, the beat its current note began on,
-// whether it is running, and whether the tune is on a note or a rest.
+// Song player: which song, the beat its current note began on, whether it runs,
+// and whether the tune is on a note.
 let songIndex = 0
 let songBeat = 0
 let songPlaying = false
 let songVoiced = false
 let songTimers = []
 let cutTimer = 0
-// the pitch and rounding to put back when the song ends, set while one is loaded
+// pitch and rounding to restore when the song ends, set while one is loaded
 let songBefore = null
-// the same, with the timer that will put them back, just after a song ends
+// the same plus the restoring timer, just after a song ends
 let songAfter = null
-// The two voices that join in on a song, a bass and a middle voice, each
-// with a synth and a head of its own. The mix drops while a song is loaded
-// so three voices do not clip.
+// The choir: a bass and a middle voice, each with its own synth and head. The
+// mix drops while a song is loaded so three voices do not clip.
 const choir = [VOICES.min, VOICES.low].map(({ scale }) => ({
   scale,
   node: null,
@@ -147,21 +140,19 @@ const CHOIR_GAIN = 0.6
 const SONG_GAIN = 0.5
 let master
 
-// Held keys sound the point midway between them, which reaches the symbols
-// that sit between two rows: T and G make ə, A and Z make æ.
+// Held keys sound the point midway between them, which reaches symbols between
+// rows: T and G make ə, A and Z make æ.
 function chord() {
   const points = keys.map((code) => KEY_POS.get(code))
   return [0, 1].map((i) => points.reduce((sum, p) => sum + p[i], 0) / points.length)
 }
 
-// formants at a point, in the current voice
 const voiced = (u, v, rounded) => formants(u, v, rounded, VOICES[voice.value].scale)
 
 const isRounded = () => round.checked
 const vowelOf = (symbol) => VOWELS.find(([other]) => other === symbol)
-// where a pitch sits on the slider, 0 to 1, which is how high the brows go
+// a pitch's place on the slider, 0 to 1, which sets brow height
 const browOf = (hz) => clamp((hz - pitch.min) / (pitch.max - pitch.min))
-// ease in and out, 0 to 1
 const ease = (t) => t * t * (3 - 2 * t)
 
 function refresh(smooth) {
@@ -188,13 +179,13 @@ function follow(event) {
 }
 
 chart.addEventListener('pointerdown', (event) => {
-  // the caption is text to select, not somewhere to play
+  // the caption is text to select
   if (event.target.closest('#caption')) return
   if (event.button) return
   wake()
   cancelAnimationFrame(gliding)
   held = true
-  // a second finger takes over, and lifting the first then changes nothing
+  // a second finger takes over, and lifting the first changes nothing
   finger = event.pointerId
   chart.setPointerCapture(event.pointerId)
   follow(event)
@@ -216,11 +207,11 @@ chart.addEventListener('pointercancel', release)
 
 const HOLD = 90,
   TRAVEL = 320
-// how long a slide between held keys takes
+// ms a slide between held keys takes
 const SLIDE = 260
 
 // Sit on the first vowel, travel, sit on the second. The ends can differ in
-// rounding, so the formants are blended directly and the dot just follows.
+// rounding, so formants are blended directly and the dot follows.
 function glide(label, from, to) {
   wake()
   cancelAnimationFrame(gliding)
@@ -246,8 +237,7 @@ function glide(label, from, to) {
   gliding = requestAnimationFrame(step)
 }
 
-// Slide the dot from where it is to a new spot, sounding the way there. A
-// slide that interrupts another carries on from wherever that one had got to.
+// a slide that interrupts another carries on from where that one got to
 function slide(to, ms = SLIDE) {
   cancelAnimationFrame(gliding)
   const from = pos
@@ -267,7 +257,6 @@ const pauseButton = document.getElementById('pause')
 const nowPlaying = document.getElementById('now')
 const faces = document.getElementById('head')
 
-// the deck beside the button shows only while a song is loaded
 function showSong() {
   player.classList.toggle('playing', songBefore !== null)
   faces.classList.toggle('singing', songBefore !== null)
@@ -280,8 +269,8 @@ function showSong() {
   pauseButton.setAttribute('aria-label', songPlaying ? 'Pause' : 'Play')
 }
 
-// A choir voice takes the page's rounding, phonation, and source sliders,
-// as the main voice does. This sets its formants for the spot it is on.
+// A choir voice takes the page's rounding, phonation, and source sliders. This
+// sets its formants for its spot.
 function choirTune(singer) {
   const { u, v } = singer.shape
   const rounded = isRounded()
@@ -293,7 +282,6 @@ function choirTune(singer) {
   })
 }
 
-// a choir voice takes up a spot on the chart and a pitch
 function choirNote(singer, u, v, hz) {
   singer.sounding = true
   singer.shape = { u, v, rounded: 0 }
@@ -302,7 +290,7 @@ function choirNote(singer, u, v, hz) {
   singer.node?.port.postMessage({ on: true, f0: hz })
 }
 
-// one of the choir takes a note of a song, or falls quiet on a rest or on nothing
+// a rest, or no note at all, silences the voice
 function choirSing(singer, note) {
   if (!note?.hz) {
     singer.sounding = false
@@ -313,11 +301,10 @@ function choirSing(singer, note) {
   choirNote(singer, u, v, note.hz * PHONATIONS[phonation.value].pitch)
 }
 
-// While a song is paused the choir is still there, and it joins in with
-// whatever is played by hand: the same vowel, on the two notes that make a
-// major chord under the played one. The ratios are the pure ones, 4 to 5 to
-// 6, which ring smoother than the tempered notes a song uses. A note that
-// would fall under the pitch slider goes up an octave.
+// Paused, the choir joins whatever is played by hand: same vowel, on the two
+// notes that make a major chord under the played one. The ratios are pure,
+// 4:5:6, which ring smoother than a song's tempered notes. A note under the
+// pitch slider goes up an octave.
 const UNDER = [2 / 3, 5 / 6]
 function accompany() {
   if (!songBefore || songPlaying) return
@@ -332,7 +319,7 @@ function accompany() {
   })
 }
 
-// stop the notes and keep the place
+// stop the notes, keep the place
 function pauseSong() {
   for (const timer of songTimers) clearTimeout(timer)
   songTimers = []
@@ -350,8 +337,8 @@ function stopSong() {
   pauseSong()
   const before = songBefore
   songBefore = null
-  // The pitch and rounding go back once the last note has died away, or it
-  // would be heard sliding to them. A note held by hand takes them at once.
+  // Restore pitch and rounding once the last note has died away, or it would be
+  // heard sliding to them. A note held by hand takes them at once.
   const restore = () => {
     songAfter = null
     round.checked = before.rounded
@@ -360,24 +347,22 @@ function stopSong() {
   }
   if (sounding) restore()
   else songAfter = { before, timer: setTimeout(restore, RING) }
-  // they may have been joining in with a held note
+  // they may have joined a held note
   for (const singer of choir) choirSing(singer)
   master?.gain.setTargetAtTime(1, ctx.currentTime, 0.05)
-  // the button starts the one after this next time
+  // the button starts the next one
   songIndex = (songIndex + 1) % SONGS.length
   songBeat = 0
   showSong()
 }
 
-// Sing one of SONGS from a given beat, and the ones after it in turn. The
-// tune is in the page's own voice and the two harmony parts in the choir's.
-// Every note is timed from the start, so the beat cannot drift and the parts
-// stay together. Notes of the tune in one breath slide from vowel to vowel,
-// and a note after a rest starts on its vowel.
+// Notes are timed from the start, so the beat cannot drift and the parts stay
+// together. Tune notes in one breath slide vowel to vowel. A note after a rest
+// starts on its vowel.
 function playSong(index, from = 0) {
   pauseSong()
   wake()
-  // a song started while the last one's settings are still to go back keeps them
+  // a song started before the last one's settings went back keeps them
   if (songAfter) {
     clearTimeout(songAfter.timer)
     songBefore = songAfter.before
@@ -390,7 +375,7 @@ function playSong(index, from = 0) {
   showSong()
   const { beat, short, notes, chords } = SONGS[index]
   const start = performance.now()
-  // run one part, picking it up at the note that is sounding on the beat
+  // run one part from the note sounding on that beat
   const run = (part, sing) => {
     let i = 0
     let at = 0
@@ -409,7 +394,6 @@ function playSong(index, from = 0) {
   run(notes, (note, at) => {
     if (!note) {
       if (index === SONGS.length - 1) return stopSong()
-      // a short quiet, then the next song, and so on through the last
       songVoiced = false
       gate()
       songIndex = index + 1
@@ -446,21 +430,21 @@ function playSong(index, from = 0) {
 
 const turn = (by) => playSong((songIndex + by + SONGS.length) % SONGS.length)
 songButton.addEventListener('click', () => {
-  // the click that ends a long press has already opened the list
+  // the click ending a long press has already opened the list
   if (pressedLong) pressedLong = false
   else if (songBefore) stopSong()
   else playSong(songIndex)
 })
-// a paused song picks up at the note it was cut off in
+// a paused song resumes at the note it was cut off in
 pauseButton.addEventListener('click', () =>
   songPlaying ? pauseSong() : playSong(songIndex, songBeat)
 )
 document.getElementById('prev').addEventListener('click', () => turn(-1))
 document.getElementById('next').addEventListener('click', () => turn(1))
 
-// A long press on the song button, or a right click, lists the songs to
-// pick from. The list is a popover that the page opens and shuts itself,
-// since one the browser shuts would close on the release of the long press.
+// A long press or right click on the song button lists the songs. The page
+// opens and shuts the popover itself, since one the browser manages would close
+// on the release of the long press.
 const tracks = document.getElementById('tracks')
 const LONG_PRESS = 450
 let pressTimer = 0
@@ -477,7 +461,7 @@ SONGS.forEach(({ title }, i) => {
 const tracksOpen = () => tracks.matches(':popover-open')
 function openTracks() {
   if (tracksOpen()) return
-  // by the button, left edges in line, on whichever side has more room
+  // by the button, left edges aligned, on the side with more room
   const { top, bottom, left } = songButton.getBoundingClientRect()
   const above = top > window.innerHeight - bottom
   tracks.style.left = `${left}px`
@@ -496,8 +480,8 @@ songButton.addEventListener('pointerdown', () => {
 for (const type of ['pointerup', 'pointerleave', 'pointercancel']) {
   songButton.addEventListener(type, () => clearTimeout(pressTimer))
 }
-// a right click, the menu key, or a long touch where the browser sends this
-// in place of a click
+// right click, menu key, or a long touch where the browser sends this in place
+// of a click
 songButton.addEventListener('contextmenu', (event) => {
   event.preventDefault()
   clearTimeout(pressTimer)
@@ -517,9 +501,7 @@ const other = (select) => {
   return i
 }
 
-// Change every setting, and never to what it was: another voice, another
-// phonation, the other rounding, and a pitch near the new voice's own. The
-// sliders follow from the presets.
+// every setting changes, and never to what it was
 function scramble() {
   voice.selectedIndex = other(voice)
   phonation.selectedIndex = other(phonation)
@@ -529,10 +511,9 @@ function scramble() {
   applyPresets()
 }
 
-// One random sound: half the time a vowel at a spot well away from the last,
-// and half the time a glide between two symbols of the rounding in force.
-// It is in the voice as set and moves no control, unless everything is asked
-// for, which is Shift.
+// One random sound: half the time a vowel well away from the last, half the
+// time a glide between two symbols of the current rounding. It moves no control
+// unless everything is asked for, which is Shift.
 function shuffle(everything) {
   cancelAnimationFrame(gliding)
   if (everything) scramble()
@@ -555,7 +536,6 @@ function shuffle(everything) {
   glide(lastGlide, from[0], to[0])
 }
 
-// shuffle now, and again on every beat for as long as it is held
 function startRandom(everything) {
   wake()
   cancelAnimationFrame(gliding)
@@ -565,15 +545,15 @@ function startRandom(everything) {
   randomTimer = setInterval(() => shuffle(everything), RANDOM_EVERY)
 }
 
-// The button and the key do the same thing, down and up. Shift is read when
-// it goes down, for the whole hold.
+// Button and key do the same, down and up. Shift is read on the way down, for
+// the whole hold.
 function pressRandom(event) {
   randomHeld = true
   startRandom(event.shiftKey)
   voiceOn(true)
 }
 
-// the sound rings on, so a quick tap is still heard whole
+// rings on, so a quick tap is heard whole
 function releaseRandom() {
   randomHeld = false
   clearInterval(randomTimer)
@@ -598,16 +578,16 @@ randomButton.addEventListener('click', (event) => {
 
 function setPitch(hz) {
   pitch.value = hz
-  // creaky sounds below the slider, so the readout is what is heard
+  // creaky sounds below the slider, so the readout shows what is heard
   const f0 = Number(pitch.value) * PHONATIONS[phonation.value].pitch
   hzOut.textContent = Math.round(f0)
   send({ f0 })
   accompany()
 }
 
-// The wheel over the chart bends the pitch, a semitone a notch. A trackpad
-// sends many small deltas, so they add up until they make a notch of 100.
-// Firefox counts a mouse wheel in lines, three to a notch.
+// The wheel over the chart bends pitch a semitone a notch. Trackpad deltas are
+// small, so they add up to a notch of 100. Firefox counts a mouse wheel in
+// lines, three to a notch.
 let wheel = 0
 chart.addEventListener(
   'wheel',
@@ -622,10 +602,10 @@ chart.addEventListener(
   { passive: false }
 )
 
-// A narrow screen takes the face out of the chart and the one-tap controls
-// out of the panel, and crops the chart to its frame. Each mover leaves a
-// marker at home to come back to. The query is index.html's narrow rule.
-// The wide box runs past the chart on the left, where the faces are.
+// A narrow screen moves the face out of the chart and the one-tap controls out
+// of the panel, and crops the chart to its frame. Each mover leaves a marker to
+// come back to. The query is index.html's narrow rule. The wide box runs past
+// the chart on the left, where the faces are.
 const WIDE_BOX = '-60 15 700 410'
 const NARROW_BOX = '22 15 553 405'
 const narrow = matchMedia(
@@ -652,7 +632,6 @@ function arrange() {
 narrow.addEventListener('change', arrange)
 arrange()
 
-// on a narrow screen the panel is a sheet, and this opens and shuts it
 const more = document.getElementById('more')
 more.addEventListener('click', () => {
   more.setAttribute('aria-expanded', document.body.classList.toggle('open'))
@@ -667,13 +646,12 @@ function showSource() {
   for (const slider of [breath, ...Object.values(fold)]) {
     slider.nextElementSibling.textContent = slider.value
   }
-  // offered only once a slider has been moved off what the presets set
+  // offered once a slider is off what the presets set
   reset.disabled = SOURCE.every((slider, i) => slider.value === preset[i])
 }
 showSource()
 
-// The source comes from the sliders, so a preset can be bent by hand and
-// nothing a phonation sets is out of sight.
+// the source is read from the sliders, so a preset can be bent by hand
 function sendSource() {
   const speaker = VOICES[voice.value]
   const rough = Number(fold.rough.value)
@@ -698,7 +676,7 @@ function applyPresets() {
   tilt.value = held.tilt + speaker.tilt
   breath.value = held.breath + speaker.breath
   for (const id of FOLD) fold[id].value = held[id] + (speaker[id] ?? 0)
-  // read back, since a slider rounds what it is given to its own step
+  // read back, since a slider rounds to its own step
   preset = SOURCE.map((slider) => slider.value)
   setPitch(pitch.value)
   sendSource()
@@ -726,9 +704,8 @@ for (const id of FOLD) fold[id].addEventListener('input', sendSource)
 round.addEventListener('change', () => refresh())
 latch.addEventListener('change', setLatch)
 
-// A control that keeps focus after a click would swallow the shortcuts, so
-// hand focus back. One reached by keyboard keeps it, so its own keys go on
-// working for as long as it is being used.
+// A clicked control that kept focus would swallow the shortcuts, so hand focus
+// back. One reached by keyboard keeps it.
 for (const control of document.querySelectorAll('input, select, button')) {
   control.addEventListener('pointerup', () => control.blur())
   control.addEventListener('change', () => {
@@ -743,9 +720,9 @@ const ARROWS = {
   ArrowDown: [0, NUDGE]
 }
 
-// Held arrows add up, so two at right angles move the dot diagonally and two
-// opposed hold it still. The page repeats them itself, since the system's
-// own key repeat only ever repeats the last key pressed.
+// Held arrows add up: two at right angles move diagonally, two opposed cancel.
+// The page repeats them itself, since the system's key repeat only repeats the
+// last key pressed.
 function nudge(codes) {
   for (const code of codes) {
     const [du, dv] = ARROWS[code]
@@ -754,12 +731,11 @@ function nudge(codes) {
   refresh()
 }
 
-// keys that step through a menu, and keep stepping while held
 const step = (select, by) => {
   select.selectedIndex = (select.selectedIndex + by + select.length) % select.length
 }
 
-// each takes 1 to step forward or -1 to step back, which is Shift
+// 1 steps forward, -1 back, which is Shift
 const CYCLES = {
   Backslash(by) {
     step(voice, by)
@@ -785,7 +761,7 @@ function silence() {
 }
 
 const ACTIONS = {
-  // with Shift it silences everything
+  // Shift silences everything
   Backspace(event) {
     if (event.shiftKey) return silence()
     latch.checked = !latch.checked
@@ -815,10 +791,8 @@ const ACTIONS = {
   }
 }
 
-// The keys a focused slider or menu needs for itself. Every other key still
-// plays, so tabbing through the controls does not switch the shortcuts off.
-// Space, Enter, and Esc are left to the browser, so they work as they do on
-// any page.
+// Keys a focused slider or menu needs for itself. Every other key still plays.
+// Space, Enter, and Esc are left to the browser.
 const MOVE_KEYS = [
   'ArrowLeft',
   'ArrowRight',
@@ -832,7 +806,6 @@ const MOVE_KEYS = [
 const ownKeys = (target) => (target.matches?.('select, input[type="range"]') ? MOVE_KEYS : [])
 
 window.addEventListener('keydown', (event) => {
-  // Esc shuts the song list and lets go of a focused control
   if (event.code === 'Escape') {
     if (tracksOpen()) tracks.hidePopover()
     document.activeElement?.blur()
@@ -846,7 +819,7 @@ window.addEventListener('keydown', (event) => {
     event.preventDefault()
     if (event.repeat) return
     wake()
-    // the direction is fixed when the key goes down, for the whole hold
+    // direction is fixed at key down, for the whole hold
     const by = event.shiftKey ? -1 : 1
     CYCLES[code](by)
     clearInterval(cycleTimer)
@@ -866,7 +839,7 @@ window.addEventListener('keydown', (event) => {
     wake()
     cancelAnimationFrame(gliding)
     if (!keys.includes(code)) keys.push(code)
-    // a key joining others slides there, which makes a diphthong of it
+    // a key joining others slides there, making a diphthong
     if (keys.length > 1) slide(chord())
     else {
       pos = chord()
@@ -912,7 +885,7 @@ window.addEventListener('keyup', (event) => {
   gate()
 })
 
-// a key released while the window is unfocused never sends keyup
+// a key released while the window is unfocused sends no keyup
 window.addEventListener('blur', () => {
   clearInterval(cycleTimer)
   clearInterval(randomTimer)
@@ -924,7 +897,7 @@ window.addEventListener('blur', () => {
   gate()
 })
 
-// the dot and the readout show at once, and the sound follows when it loads
+// dot and readout show at once, the sound follows when it loads
 refresh()
 
 ctx.audioWorklet.addModule('synth.js').then(() => {
@@ -938,38 +911,36 @@ ctx.audioWorklet.addModule('synth.js').then(() => {
     singer.node = voiceNode()
     singer.node.connect(new GainNode(ctx, { gain: CHOIR_GAIN })).connect(master)
   }
-  // catch up on anything set while the module was loading
+  // catch up on anything set while the module loaded
   setPitch(pitch.value)
   sendSource()
   refresh()
   gate()
 })
 
-// The face in the gap beside the chart, a front view that mouths the vowel.
-// Jaw and lip opening follow height, lip width follows backness, rounding
-// purses the lips, and the brows follow pitch. The eyes watch the dot while
-// it sounds and the pointer when it is quiet, and their lids follow
-// phonation, pitch, and the squint of a spread vowel.
-// Tilt shows as effort. A flat tilt is a pressed voice, so the brows knit,
-// the lids narrow, the lips thin, and the jaw muscle stands out. A steep tilt
-// is a slack one, so the brows ease, the jaw hangs, and the mouth corners drop.
-// Breath shows as air let out: the nostrils flare, the lips part, the cheeks
-// draw in, and the jaw hangs, so the head gets longer and leaner, never
-// wider. All of it swells and settles on a slow breathing cycle.
-// It is a cartoon of the visible articulators, not a measured model, and
-// the tongue, which does most of the work, cannot be seen from the front.
-// Two smaller heads sit either side of it, each turned a little outward.
-// They are the choir's. They fade in when a song starts, each mouths its
-// own part, and they fade out when it is over.
+// The face beside the chart, a front view that mouths the vowel. Jaw and lip
+// opening follow height, lip width follows backness, rounding purses the lips,
+// brows follow pitch. The eyes watch the dot while it sounds and the pointer
+// when quiet. Lids follow phonation, pitch, and the squint of a spread vowel.
+// Tilt shows as effort. Flat is pressed: brows knit, lids narrow, lips thin,
+// jaw muscle stands out. Steep is slack: brows ease, jaw hangs, mouth corners
+// drop.
+// Breath shows as air let out: nostrils flare, lips part, cheeks draw in, jaw
+// hangs, so the head gets longer and leaner, never wider. All of it swells and
+// settles on a slow breathing cycle.
+// A cartoon of the visible articulators, not a measured model. The tongue does
+// most of the work and cannot be seen from the front.
+// Two smaller heads either side, each turned a little outward, are the choir's.
+// They fade in for a song and each mouths its own part.
 const FACE_X = 45,
   FACE_Y = 258
-// roughly where the narrow layout puts the face, in the chart's coordinates
+// about where the narrow layout puts the face, in chart coordinates
 const UNDER_CHART = [120, 560]
-// Reduced motion stops the blink, the one movement nobody asked for. The
-// mouth still eases, since it only moves in answer to the controls.
+// Reduced motion stops the blink, the one movement nobody asked for. The mouth
+// still eases, since it only answers the controls.
 const still = matchMedia('(prefers-reduced-motion: reduce)').matches
-// How fast each part of the face settles, as a spring rate per second. A
-// jaw takes about a sixth of a second, brows drift, and a blink is quick.
+// Spring rate per second for each part of the face. A jaw takes about a sixth
+// of a second, brows drift, a blink is quick.
 const RATES = {
   open: 26,
   width: 26,
@@ -985,7 +956,7 @@ const RATES = {
   effort: 9,
   air: 9
 }
-// how far the lids sit open for each phonation, 1 being ordinary
+// how far open the lids sit per phonation, 1 being ordinary
 const LIDS = { modal: 1, breathy: 0.8, creaky: 0.55, whisper: 1.15 }
 const EYE_X = 24,
   EYE_Y = -17
@@ -995,8 +966,8 @@ const BLINK_EVERY = 4200,
 const BREATHS_PER_MS = 0.25 / 1000
 // how soon the gaze saturates as its target moves away, in SVG units
 const GAZE_REACH = 80
-// Tilt as a look, from 1 pressed to -1 slack. An ordinary voice sits between
-// 4 and 6 dB and leaves the face alone. The thresholds are guesses.
+// Tilt as a look, 1 pressed to -1 slack. An ordinary voice, 4 to 6 dB, leaves
+// the face alone. The thresholds are guesses.
 function strain() {
   const db = Number(tilt.value)
   return db < 4 ? 1 - db / 4 : -clamp((db - 6) / 12)
@@ -1004,15 +975,14 @@ function strain() {
 const SVG = 'http://www.w3.org/2000/svg'
 // the paths of one head, back to front
 const HEAD_PATHS = ['mesh', 'nodes', 'outline', 'features', 'mouth']
-// where a side head sits from the main one, clear of it, its size, and its
-// turn in radians
+// a side head's offset from the main one, its size, and its turn in radians
 const SIDE_X = 75,
   SIDE_Y = 12,
   SIDE_SCALE = 0.42,
   SIDE_YAW = 0.25
 // how far the middle of the face stands out from its edge, for the turn
 const HEAD_DEPTH = 34
-// a side head is drawn where the main one is, then shrunk and moved by its group
+// drawn where the main head is, then shrunk and moved by its group
 function sideHead(side) {
   const group = document.createElementNS(SVG, 'g')
   group.setAttribute('class', 'side-head')
@@ -1045,7 +1015,6 @@ const restingFace = () => ({
   effort: strain(),
   air: 0
 })
-// the main head first, then the choir's, each with its own springs
 const heads = [
   { paths: Object.fromEntries(HEAD_PATHS.map((id) => [id, document.getElementById(id)])), yaw: 0 },
   ...choir.map((singer, i) => ({
@@ -1059,7 +1028,7 @@ const heads = [
 })
 let lastFrame = performance.now()
 let nextBlink = performance.now() + BLINK_EVERY
-// where the pointer last was over the page, in the chart's coordinates
+// where the pointer last was, in chart coordinates
 let pointer = null
 
 window.addEventListener('pointermove', (event) => {
@@ -1072,7 +1041,7 @@ const PUPIL = Array.from({ length: 8 }, (_, i) => [
   Math.sin((i * Math.PI) / 4)
 ])
 // The right half of the face as triangles over named points, mirrored when
-// drawn. The mesh lines are the edges of these.
+// drawn. The mesh lines are their edges.
 const TRIANGLES = `
   crown a1 m1, a1 b1 m1, a1 a2 b1, a2 t1 b1, a2 a3 t1, t1 a3 b2, b1 t1 b2,
   b1 b2 b4, b1 b4 b3, b1 b3 m1, m1 b3 m2,
@@ -1103,15 +1072,14 @@ const EDGES = [
 ].map((edge) => edge.split(' '))
 const OUTLINE = ['crown', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'chin']
 
-// what one head should look like now, given the part it sings
 function faceTarget(now, { shape, sounding, brow }) {
   const { u, v, rounded } = shape
   const spread = 1 - 0.15 * v - 0.12 * u
   const pursed = 0.32 + 0.25 * v
   if (now > nextBlink + BLINK_FOR) nextBlink = now + BLINK_EVERY * (0.5 + Math.random())
-  // the eyes go to the dot while it sounds, and wander after the pointer when idle
+  // eyes go to the dot while it sounds, and follow the pointer when idle
   const [lookX, lookY] = !sounding && pointer ? pointer : toXY(u, v)
-  // on a narrow screen the face sits under the chart, so it looks up at it
+  // on a narrow screen the face sits under the chart and looks up at it
   const [faceX, faceY] = narrow.matches ? UNDER_CHART : [FACE_X, FACE_Y]
   const lookDX = lookX - faceX
   const lookDY = lookY - faceY - EYE_Y
@@ -1122,7 +1090,6 @@ function faceTarget(now, { shape, sounding, brow }) {
   // a close spread vowel pulls the cheeks up into the eyes, as a smile does
   const squint = sounding ? 0.25 * (1 - rounded) * (1 - v) : 0
   return {
-    // the mouth rests closed when nothing is sounding
     open: sounding ? lerp(0.12 + 0.88 * v, 0.18 + 0.6 * v, rounded) : 0,
     width: sounding ? lerp(spread, pursed, rounded) : 0.8,
     lips: sounding ? rounded : 0,
@@ -1145,7 +1112,7 @@ function facePoints(face, now) {
   const lid = Math.max(0, face.lid) * (1 - face.blink)
   const effort = clamp(face.effort)
   const lax = clamp(-face.effort)
-  // breathing is movement nobody asked for, so reduced motion holds it still
+  // reduced motion holds the breathing still
   const swell = still ? 1 : 1 + 0.25 * Math.sin(2 * Math.PI * BREATHS_PER_MS * now)
   const flare = Math.max(0, face.flare) * swell
   const air = Math.max(0, face.air) * swell
@@ -1180,8 +1147,8 @@ function facePoints(face, now) {
     a6: [37 - 2 * air + 4 * effort, 45 + jaw * 0.6 + 3 * lax + air],
     a7: [20, 61 + jaw + 2 * lax + 1.5 * air],
     b1: [22, -50],
-    // The brow is a tapered shape: a thick inner end, an arch, and a tail.
-    // Effort draws the inner end down and in, and ease lets it rise.
+    // The brow tapers: a thick inner end, an arch, a tail. Effort draws the
+    // inner end down and in, ease lets it rise.
     b2: [40, -30 - lift - effort + lax],
     b3: [11.5 - 2.5 * effort, -32 - lift * 1.3 + 3.5 * effort - 2 * lax],
     b3l: [12 - 2.5 * effort, -29 - lift * 1.3 + 3.5 * effort - 2 * lax],
@@ -1203,8 +1170,8 @@ function facePoints(face, now) {
     c1: [33 - 3 * air, 6 - 2 * effort + 1.5 * air],
     c2: [24 - 2 * effort, 25 + jaw * 0.3 - 2 * effort + air],
     c3: [28, 45 + jaw * 0.6],
-    // The nose from the front is mostly its base: the bridge is two faint
-    // mesh lines, and only the wings and the underside are drawn bright.
+    // The nose from the front is mostly its base. The bridge is two faint mesh
+    // lines, and only the wings and underside are drawn bright.
     nb: [3.5, -24],
     n0: [4.5, -5],
     nt: [6.8 + 0.5 * flare, 8 - 0.5 * flare],
@@ -1213,7 +1180,7 @@ function facePoints(face, now) {
     n4: [3.6, 16 - 5 * spread],
     ch: [10, 51.5 + jaw * 0.9 + 1.5 * lax + air],
     corner: [w, cornerY],
-    // the upper lip peaks either side of a dip, and the lower is one full curve
+    // the upper lip peaks either side of a dip, the lower is one full curve
     upper: [w * 0.62, my - outer * 0.7],
     upperIn: [w * 0.22, my - outer],
     lipTop: [0, my - outer * 0.82],
@@ -1238,9 +1205,8 @@ function drawHead({ paths, face, speed, yaw, singer }, now, dt) {
       brow: browOf(pitch.value)
     }
   )
-  // A critically damped spring per value, solved exactly so a long frame
-  // cannot blow it up. It eases in as well as out, and a change of target
-  // mid-move bends the motion instead of restarting it.
+  // A critically damped spring per value, solved exactly so a long frame cannot
+  // blow it up. A change of target mid-move bends the motion.
   for (const key in target) {
     const rate = RATES[key]
     const gap = face[key] - target[key]
@@ -1341,8 +1307,8 @@ const marked = new Set()
 for (const [symbol, u, v, rounded] of VOWELS) {
   const [x, y] = toXY(u, v)
   const paired = VOWELS.some(([other, ou, ov]) => other !== symbol && ou === u && ov === v)
-  // as on the printed chart: unrounded left of the point, rounded right,
-  // and a lone central symbol sits on the point itself
+  // as on the printed chart: unrounded left of the point, rounded right, a lone
+  // central symbol on the point
   const centered = !paired && u === 0.5
   if (!centered && !marked.has(`${u},${v}`)) {
     marked.add(`${u},${v}`)

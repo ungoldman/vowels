@@ -19,7 +19,7 @@ const FLUTTER_RATES = [12.7, 7.1, 4.7]
 // long to settle onto its pitch. Both are guesses.
 const DRIFT_HZ = 1.5
 const SETTLE = 0.06
-// tilt is specified as attenuation at this frequency
+// tilt is attenuation at this frequency
 const TILT_AT = 3000
 // noise is this much quieter while the glottis is closed
 const NOISE_CLOSED = 0.5
@@ -86,8 +86,8 @@ export class VowelSynth {
       drift: 0.005,
       // how far under its pitch a note starts
       scoop: 0.05,
-      // Hz added to the F1 bandwidth while the glottis is open, since an
-      // open glottis lets energy leak down into the lungs
+      // Hz added to the F1 bandwidth while the glottis is open, which lets
+      // energy leak down into the lungs
       openBandwidth: 0,
       smooth: 0.015,
       on: false
@@ -169,8 +169,8 @@ export class VowelSynth {
       this.f0 += (target.f0 - this.f0) * glideK
       this.voicing += (target.voicing - this.voicing) * glideK
       this.level += (goal - this.level) * levelK
-      // The scoop is on the way in only. The pitch holds while a note dies
-      // away, and the next one scoops again once this one has gone.
+      // The scoop is on the way in only. The pitch holds as a note dies away,
+      // and the next scoops once this one has gone.
       if (goal) this.settle += (1 - this.settle) * settleK
       else if (this.level < 1e-3) this.settle = 0
       const scoop = 1 - target.scoop * (1 - this.settle)
@@ -211,8 +211,8 @@ export class VowelSynth {
   }
 }
 
-// Registers the processor when loaded inside an audio worklet, which is the
-// only place these globals exist.
+// registers the processor inside an audio worklet, the only place these globals
+// exist
 export function register(scope) {
   if (typeof scope.registerProcessor !== 'function') return
   scope.registerProcessor(

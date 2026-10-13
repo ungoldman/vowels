@@ -1,5 +1,4 @@
-// The vowel chart as data and arithmetic: where each symbol sits, what it
-// sounds like, and which key plays it. Nothing here touches the page.
+// The vowel chart as data and arithmetic. Nothing here touches the page.
 
 // the chart's frame, in SVG units
 const TOP = 50
@@ -8,9 +7,9 @@ const RIGHT = 540
 const TOP_LEFT = 60
 const BOTTOM_LEFT = 300
 
-// [F1, F2] in Hz for the sixteen cardinal vowels, male voice, from Catford,
-// A Practical Introduction to Phonetics (2001), p. 154. Each edge runs
-// close, close-mid, open-mid, open.
+// [F1, F2] in Hz for the sixteen cardinal vowels, male voice. Catford, A
+// Practical Introduction to Phonetics (2001), p. 154. Each edge runs close,
+// close-mid, open-mid, open.
 export const CARDINALS = {
   unrounded: {
     front: [
@@ -42,9 +41,8 @@ export const CARDINALS = {
   }
 }
 
-// [symbol, u, v, rounded]. u runs front (0) to back (1), v runs close (0)
-// to open (1). Only the sixteen above are measured, the rest are positions
-// on the surface interpolated between them.
+// [symbol, u, v, rounded]. u runs front (0) to back (1), v close (0) to open
+// (1). Only the sixteen above are measured. The rest are interpolated.
 export const VOWELS = [
   ['i', 0, 0, false],
   ['y', 0, 0, true],
@@ -76,23 +74,23 @@ export const VOWELS = [
   ['ɒ', 1, 1, true]
 ]
 
-// Klatt's (1980) defaults for F4 to F6, which barely move between vowels,
-// and for the bandwidths of F1 to F6. He stopped there because he sampled
-// at 10 kHz. The four above F6 are a guess, one more per kHz as in a uniform
-// tube, each as wide as F6. Without them nothing sounds above 4 kHz.
+// Klatt's (1980) defaults for F4 to F6 and for the bandwidths of F1 to F6. He
+// stopped there, sampling at 10 kHz. The four above F6 are a guess: one more
+// per kHz as in a uniform tube, each as wide as F6. Without them nothing sounds
+// above 4 kHz.
 export const UPPER = [3300, 3750, 4900, 5900, 6900, 7900, 8900]
 export const BANDWIDTHS = [50, 70, 110, 250, 200, 1000, 1000, 1000, 1000, 1000]
 
-// The size of the speaker, in pitch order. Scale multiplies every formant,
-// standing in for a shorter vocal tract. Mid and high are the average
-// ratios to the low voice in Peterson and Barney (1952). Min and max sit at
-// the ends of the pitch slider and their scales are extrapolated.
+// Speaker size, in pitch order. Scale multiplies every formant, standing in for
+// a shorter vocal tract. Mid and high are the average ratios to the low voice
+// in Peterson and Barney (1952). Min and max sit at the ends of the pitch
+// slider, their scales extrapolated.
 // The rest are offsets on the phonation below. Klatt and Klatt (1990) found
-// their higher-voiced talkers breathier on average, and carrying that up to
-// high and max is a guess.
-// Jitter and shimmer are the half-width of a uniform per-cycle wobble in
-// period and amplitude. The measured figure, the mean change from one cycle
-// to the next, comes out at two thirds of this.
+// higher-voiced talkers breathier on average. Carrying that up to high and max
+// is a guess.
+// Jitter and shimmer are the half-width of a uniform per-cycle wobble in period
+// and amplitude. The measured figure, the mean change between cycles, is two
+// thirds of this.
 // Order matters: the voice key steps through them as listed.
 export const VOICES = {
   min: {
@@ -142,10 +140,10 @@ export const VOICES = {
   }
 }
 
-// How the vocal folds are held. Open quotient is the share of each cycle
-// the glottis is open: about a third creaky, half modal, two thirds breathy.
-// Tilt is dB lost at 3 kHz, rough multiplies the speaker's jitter and
-// shimmer, and pitch multiplies the pitch slider.
+// How the vocal folds are held. Open quotient is the share of each cycle the
+// glottis is open: about a third creaky, half modal, two thirds breathy. Tilt
+// is dB lost at 3 kHz, rough multiplies the speaker's jitter and shimmer, and
+// pitch multiplies the pitch slider.
 export const PHONATIONS = {
   modal: {
     openQuotient: 0.5,
@@ -189,8 +187,8 @@ export const PHONATIONS = {
   }
 }
 
-// The four key rows are the four cardinal heights, close at the top, and
-// each runs front to back. The fifth key of a row is the central column.
+// The four key rows are the four cardinal heights, close at the top, each
+// running front to back. A row's fifth key is the central column.
 export const KEY_ROWS = [
   ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9'],
   ['KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyT', 'KeyY', 'KeyU', 'KeyI', 'KeyO'],
@@ -200,7 +198,7 @@ export const KEY_ROWS = [
 export const KEY_POS = new Map(
   KEY_ROWS.flatMap((row, r) => row.map((code, c) => [code, [c / 8, r / 3]]))
 )
-// schwa sits between two rows, so it gets a key of its own
+// schwa sits between two rows, so it has its own key
 KEY_POS.set('Digit0', [0.5, 0.5])
 
 export const clamp = (n) => Math.min(1, Math.max(0, n))
@@ -220,8 +218,8 @@ export function toUV(x, y) {
   return [clamp((x - left) / (RIGHT - left)), v]
 }
 
-// Walk down the front and back edges to height v, then across to u. Exact
-// at every cardinal vowel. Scale is the voice's, see VOICES.
+// Walk down the front and back edges to height v, then across to u. Exact at
+// every cardinal vowel. Scale is the voice's, see VOICES.
 export function formants(u, v, rounded, scale = 1) {
   const { front, back } = CARDINALS[rounded ? 'rounded' : 'unrounded']
   const row = Math.min(2, Math.floor(v * 3))
@@ -229,8 +227,8 @@ export function formants(u, v, rounded, scale = 1) {
   const [f1, f2] = [0, 1].map((i) =>
     geo(geo(front[row][i], front[row + 1][i], t), geo(back[row][i], back[row + 1][i], t), u)
   )
-  // No F3 in the source. This is an estimate: flat for rounded vowels, and
-  // rising with F2 for the front unrounded ones, where it reaches about 3000.
+  // No F3 in the source. An estimate: flat for rounded vowels, rising with F2
+  // for front unrounded ones, where it reaches about 3000.
   const f3 = rounded ? 2200 : 2500 + Math.max(0, f2 - 1900)
   return [f1, f2, f3, ...UPPER].map((f) => f * scale)
 }
@@ -244,9 +242,9 @@ const BACKNESS = new Map([
   [1, 'back']
 ])
 
-// A symbol's name in the IPA's terms, or nothing for a string that is not
-// one, such as a diphthong. The two lone central symbols, ə and ɐ, are not
-// specified for rounding, so theirs is left out.
+// A symbol's name in IPA terms, or nothing for a string that is not one, such
+// as a diphthong. The lone central symbols, ə and ɐ, are not specified for
+// rounding, so theirs is left out.
 export function describe(symbol) {
   const vowel = VOWELS.find(([other]) => other === symbol)
   if (!vowel) return ''
@@ -288,20 +286,20 @@ const score = (text) =>
       return { hz: note === '-' ? 0 : noteHz(note), beats: Number(beats), symbol }
     })
 
-// fold a pitch by octaves into the octave that starts at low
+// fold a pitch by octaves into the octave starting at low
 const fold = (hz, low) => hz * 2 ** -Math.floor(Math.log2(hz / low))
-// The bass keeps to the octave from D2. The middle voice keeps between G2
-// and G#3 when it picks its own notes.
+// The bass keeps to the octave from D2. The middle voice picks its own notes
+// between G2 and G#3.
 const BASS_LOW = 73
 const MID_LOW = 98
 const MID_HIGH = 208
-// a part takes its second vowel when a note repeats, so the note is heard again
+// a repeated note takes the second vowel, so it is heard again
 const turn = (part, hz, [first, second]) =>
   part.at(-1)?.hz === hz && part.at(-1).symbol === first ? second : first
 
-// The chord tone for the middle voice that lies nearest its last note, so it
-// keeps a note two chords share and otherwise moves by the smallest step.
-// It sings thirds and fifths, and leaves roots to the bass.
+// The middle voice's chord tone nearest its last note, so it keeps a note two
+// chords share and otherwise moves by the smallest step. It sings thirds and
+// fifths and leaves roots to the bass.
 function nearestTone(root, third, last, skip) {
   let best
   for (const step of [third, 7]) {
@@ -314,9 +312,9 @@ function nearestTone(root, third, last, skip) {
   return best
 }
 
-// The chord's note a minor third or more under a note of the tune, as near
-// it as the chord allows, for singing along below it. Never under the middle
-// voice's floor, so under a very low note it comes out above.
+// The chord's note a minor third or more under a note of the tune, as near as
+// the chord allows. Never under the middle voice's floor, so under a very low
+// note it comes out above.
 function under(root, third, hz) {
   const tones = [0, third, 7]
     .flatMap((step) => [1, 2, 4].map((octave) => root * octave * 2 ** (step / 12)))
@@ -325,16 +323,15 @@ function under(root, third, hz) {
   return below.length ? Math.max(...below) : Math.min(...tones)
 }
 
-// Two parts under a tune from its chords, written chord/beats with a dash for
-// a rest. They do not sing all the time, and the song falls into quarters.
-// In the first the bass takes the front of each chord and the middle voice
-// answers on the back of it. In the second and the last the bass holds each
-// root while the middle voice sings along under the tune, in its rhythm. In
-// the third both hold through while one or the other moves to another note
-// of the chord. Both hold the last chord. With no tune given, the singing
-// along is call and answer too. A chord shorter than two beats is sung whole.
-// The middle voice keeps to [ə] and [e], which sound at an even level. An
-// open vowel such as [ɑ] comes out several times louder and overdrives.
+// Two parts under a tune from its chords, written chord/beats with a dash for a
+// rest. The song falls into quarters. First: the bass takes the front of each
+// chord and the middle voice answers on the back. Second and last: the bass
+// holds each root while the middle voice sings along under the tune, in its
+// rhythm, or answers as before if no tune is given. Third: both hold while one
+// or the other moves to another note of the chord. Both hold the last chord. A
+// chord under two beats is sung whole.
+// The middle voice keeps to [ə] and [e], which sound at an even level. An open
+// vowel such as [ɑ] is several times louder and overdrives.
 export function harmony(text, tune = []) {
   const chords = text
     .trim()
@@ -412,21 +409,18 @@ export function harmony(text, tune = []) {
   return { bass, mid }
 }
 
-// A bass and a middle part given note by note, with parts from harmony to
-// follow them if there are any.
+// a bass and a middle part given note by note, then any parts from harmony
 const parts = (bass, mid, rest = { bass: [], mid: [] }) => ({
   bass: [...score(bass), ...rest.bass],
   mid: [...score(mid), ...rest.mid]
 })
 
-// The songs, in the order they play. A tune is written a bar to a line, with
-// the length of a beat in ms. Each keeps to what the synth can sing: every
-// note is on the pitch slider and sits under its vowel's F1, so the high
-// notes take open vowels, as a singer's do. A short song cuts every note off
-// early. All are old tunes in the public domain, each in a key that fits the
-// slider.
-// The chords are for the two voices that join in, see harmony. A song can
-// give those two parts note by note instead, see parts.
+// The songs, in play order. A tune is a bar to a line, with the length of a
+// beat in ms. Every note is on the pitch slider and under its vowel's F1, so
+// high notes take open vowels, as a singer's do. A short song cuts every note
+// off early. All are public domain tunes, each in a key that fits the slider.
+// The chords are for the two voices that join in, see harmony. A song can give
+// those parts note by note instead, see parts.
 export const SONGS = [
   // Korobeiniki, a Russian folk song, the tune twice. Each note is sung on the
   // vowel of its syllable in the first verse of the Russian words, fitted to

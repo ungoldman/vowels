@@ -36,7 +36,6 @@ export function listen(server, port) {
   })
 }
 
-// the command that opens a URL in the default browser
 export function opener(platform, osRelease) {
   if (platform === 'darwin') return 'open'
   // WSL reports linux, but the browser is on the Windows side
