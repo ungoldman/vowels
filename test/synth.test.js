@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { register, VowelSynth } from '../synth.js'
+import { register, VowelSynth } from '../src/synth.js'
 
 const RATE = 48000
 const BLOCK = 128

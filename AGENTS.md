@@ -9,7 +9,7 @@
 
 Needs Node 22.12 or later and a browser with audio worklets. `npm start` serves http://localhost:4173 and opens it. `-- --no-open` skips the browser and `PORT` changes the port.
 
-Private repo, not yet published. `npm run site` copies the four page files into `../ungoldman.github.io/vowels/`. Do not alter version.
+Private repo, not yet published. `npm run site` copies the four page files from `src/` into `../ungoldman.github.io/vowels/`. Do not alter version.
 
 ## Conventions
 
@@ -19,9 +19,11 @@ Private repo, not yet published. `npm run site` copies the four page files into 
 - Plain JavaScript modules with no build step, so any static host can serve the page.
 - A number from a paper names the paper in a comment beside it. A guess says it is one.
 - Few comments, kept trim.
-- Coverage stays at 100% on `vowels.js`, `synth.js`, and `server.js`. `app.js` is page wiring and is checked in a browser.
+- Coverage stays at 100% on `src/vowels.js`, `src/synth.js`, and `src/server.js`. `app.js` is page wiring and is checked in a browser.
 
 ## Layout
+
+Source is in `src/`, tests in `test/`.
 
 - `index.html`: markup, styles, and the Credits popup. The page is these four files with relative paths, so it drops into a subdirectory of a static site.
 - `vowels.js`: the chart as data and arithmetic. Symbol positions, formants, voices, phonations, the key map, the songs, and the harmony under them. No DOM.
@@ -43,14 +45,14 @@ Matched by physical position, `event.code`.
 
 ## Songs
 
-`SONGS` in `vowels.js`, in play order. The player sings them in turn with a gap between.
+`SONGS` in `src/vowels.js`, in play order. The player sings them in turn with a gap between.
 
 - A tune is `note/beats/vowel` tokens, a bar to a line, with `-` for a rest. A repeated pitch on a new vowel is one breath with the vowel sliding.
 - `chords` is either `chord/beats` tokens, from which `harmony` writes a bass and a middle part, or those two parts given note by note.
 - `short` cuts every note off early, for staccato.
 - Every note must sit on the pitch slider, 70 to 320 Hz, and under its vowel's F1. The test enforces both, and lists each song's beats in play order.
 - Only public domain tunes. Take the notes from a score or a setting, not from a game's arrangement, and say which in the comment above the song.
-- The Credits popup in `index.html` names every song and its source, in play order. Keep it in step with `SONGS`.
+- The Credits popup in `src/index.html` names every song and its source, in play order. Keep it in step with `SONGS`.
 - The page's voice sings the tune. The choir is two more synths, a bass and a middle voice, each with a small head that shows only while a song is loaded. Paused, they harmonise with whatever is played by hand.
 - Loudness varies several times over between vowels. Open ones such as [ɑ] overdrive the output, so the generated middle part keeps to [ə] and [e].
 

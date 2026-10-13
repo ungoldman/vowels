@@ -19,7 +19,7 @@ import {
   toXY,
   VOICES,
   VOWELS
-} from '../vowels.js'
+} from '../src/vowels.js'
 
 const unit = fc.double({ min: 0, max: 1, noNaN: true })
 

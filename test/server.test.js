@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { test } from 'node:test'
-import { createVowelServer, listen, opener } from '../server.js'
+import { createVowelServer, listen, opener } from '../src/server.js'
 
 async function serve(t, port = 0) {
   const server = createVowelServer()
@@ -64,7 +64,7 @@ test('npm start prints a URL that serves the page', async (t) => {
   probe.close()
   await once(probe, 'close')
 
-  const child = spawn(process.execPath, ['start.js', '--no-open'], {
+  const child = spawn(process.execPath, ['src/start.js', '--no-open'], {
     cwd: new URL('..', import.meta.url),
     env: { ...process.env, PORT: String(port) }
   })
