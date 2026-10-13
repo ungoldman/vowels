@@ -49,11 +49,11 @@ test('formants are exact at the sixteen cardinal vowels', () => {
   }
 })
 
-test('formants return five rising frequencies', () => {
+test('formants return ten rising frequencies', () => {
   fc.assert(
     fc.property(unit, unit, fc.boolean(), (u, v, rounded) => {
       const freqs = formants(u, v, rounded)
-      assert.equal(freqs.length, 5)
+      assert.equal(freqs.length, 10)
       for (let i = 1; i < freqs.length; i++) assert.ok(freqs[i] > freqs[i - 1])
     })
   )

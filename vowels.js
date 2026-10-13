@@ -76,10 +76,12 @@ export const VOWELS = [
   ['ɒ', 1, 1, true]
 ]
 
-// Klatt's (1980) defaults for F4 and F5, which barely move between vowels,
-// and for the bandwidths of F1 to F5
-export const UPPER = [3300, 3750]
-export const BANDWIDTHS = [50, 70, 110, 250, 200]
+// Klatt's (1980) defaults for F4 to F6, which barely move between vowels,
+// and for the bandwidths of F1 to F6. He stopped there because he sampled
+// at 10 kHz. The four above F6 are a guess, one more per kHz as in a uniform
+// tube, each as wide as F6. Without them nothing sounds above 4 kHz.
+export const UPPER = [3300, 3750, 4900, 5900, 6900, 7900, 8900]
+export const BANDWIDTHS = [50, 70, 110, 250, 200, 1000, 1000, 1000, 1000, 1000]
 
 // The size of the speaker, in pitch order. Scale multiplies every formant,
 // standing in for a shorter vocal tract. Mid and high are the average

@@ -2,7 +2,7 @@
 // "Software for a cascade/parallel formant synthesizer", and Klatt and Klatt
 // (1990) for the glottal pulse and the flutter.
 //
-// Chain: glottal pulse -> tilt -> + aspiration noise -> F1..F5 in series.
+// Chain: glottal pulse -> tilt -> + aspiration noise -> formants in series.
 // In series the formants set each other's relative levels, as they do in a
 // vocal tract, so there are no per-formant gains to balance.
 
@@ -63,8 +63,9 @@ export class VowelSynth {
     this.rate = rate
     this.target = {
       f0: 120,
-      formants: [500, 1500, 2500, 3300, 3750],
-      bandwidths: [50, 70, 110, 250, 200],
+      // a shorter list leaves the resonators above it as they were
+      formants: [500, 1500, 2500, 3300, 3750, 4900, 5900, 6900, 7900, 8900],
+      bandwidths: [50, 70, 110, 250, 200, 1000, 1000, 1000, 1000, 1000],
       // share of each cycle the glottis is open
       openQuotient: 0.5,
       // dB lost at TILT_AT
@@ -123,7 +124,7 @@ export class VowelSynth {
 
     // formants move once per block, which is under 3 ms at 48 kHz
     const k = 1 - Math.exp(-n / (target.smooth * rate))
-    for (let i = 0; i < resonators.length; i++) {
+    for (let i = 0; i < target.formants.length; i++) {
       this.formants[i] += (target.formants[i] - this.formants[i]) * k
       this.bandwidths[i] += (target.bandwidths[i] - this.bandwidths[i]) * k
       // a formant above Nyquist would fold back down, so leave it out

@@ -132,6 +132,22 @@ test('formants glide to a new target instead of jumping', () => {
   assert.ok(Math.abs(synth.formants[0] - 300) < 1)
 })
 
+test('the formants above F5 fill in the top of the spectrum', () => {
+  const top = (formants) => {
+    const synth = new VowelSynth(RATE)
+    synth.set({ ...steady, formants })
+    render(synth, 200)
+    // tapered, or the strong low harmonics leak over the quiet top
+    const x = render(synth, 100).map((v, n, all) => v * Math.sin((Math.PI * n) / all.length) ** 2)
+    // harmonics that high move with the flutter, so take the whole band
+    let power = 0
+    for (let hz = 5000; hz < 7000; hz += 25) power += 10 ** (level(x, hz) / 10)
+    return 10 * Math.log10(power)
+  }
+  const five = [500, 1500, 2500, 3300, 3750]
+  assert.ok(top([...five, 4900, 5900, 6900, 7900, 8900]) > top(five) + 12)
+})
+
 test('a formant above half the sample rate is left out', () => {
   const synth = new VowelSynth(8000)
   synth.set({ on: true })
