@@ -269,8 +269,8 @@
     #quick .slider { grid-template-columns: auto minmax(0, 1fr); }
     /* The sheet stops under the face, so the chart, the face, and the row
        beside it stay in view. 228px is the stage down to there, less its
-       chart. It is packed tight so all of it shows on a 390 by 844 phone,
-       and a longer one scrolls by touch with no bar drawn. */
+       chart. A short screen leaves it little height, never under 160px,
+       and it scrolls by touch with no bar drawn. */
     #panel section { gap: 2px; }
     #panel .slider { min-height: 34px; }
     #speaker h2 { display: none; }
@@ -278,7 +278,7 @@
       position: fixed;
       inset: auto 0 0;
       z-index: 2;
-      max-height: max(38dvh, calc(100dvh - (100vw - 32px) * 0.732 - 228px));
+      max-height: max(160px, calc(100dvh - (100vw - 32px) * 0.732 - 228px));
       overflow-y: auto;
       overscroll-behavior: contain;
       scrollbar-width: none;
