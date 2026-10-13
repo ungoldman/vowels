@@ -4,6 +4,7 @@ import fc from 'fast-check'
 import {
   CARDINALS,
   clamp,
+  describe,
   formants,
   GLIDES,
   geo,
@@ -165,4 +166,14 @@ test('every voice with every phonation leaves the glottis some closed time', () 
       assert.ok(open > 0 && open < 1)
     }
   }
+})
+
+test('symbols are named as the IPA names them', () => {
+  assert.equal(describe('i'), 'close front unrounded')
+  assert.equal(describe('ʊ'), 'near-close near-back rounded')
+  assert.equal(describe('ɞ'), 'open-mid central rounded')
+  assert.equal(describe('ə'), 'mid central')
+  assert.equal(describe('ɐ'), 'near-open central')
+  assert.equal(describe('aɪ'), '')
+  for (const [symbol] of VOWELS) assert.doesNotMatch(describe(symbol), /undefined/)
 })

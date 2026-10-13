@@ -241,6 +241,27 @@ export function formants(u, v, rounded, scale = 1) {
   return [f1, f2, f3, ...UPPER].map((f) => f * scale)
 }
 
+const HEIGHTS = ['close', 'near-close', 'close-mid', 'mid', 'open-mid', 'near-open', 'open']
+const BACKNESS = new Map([
+  [0, 'front'],
+  [0.2, 'near-front'],
+  [0.5, 'central'],
+  [0.8, 'near-back'],
+  [1, 'back']
+])
+
+// A symbol's name in the IPA's terms, or nothing for a string that is not
+// one, such as a diphthong. The two lone central symbols, ə and ɐ, are not
+// specified for rounding, so theirs is left out.
+export function describe(symbol) {
+  const vowel = VOWELS.find(([other]) => other === symbol)
+  if (!vowel) return ''
+  const [, u, v, rounded] = vowel
+  const paired = VOWELS.some(([other, ou, ov]) => other !== symbol && ou === u && ov === v)
+  const lips = u === 0.5 && !paired ? '' : rounded ? ' rounded' : ' unrounded'
+  return `${HEIGHTS[Math.round(v * 6)]} ${BACKNESS.get(u)}${lips}`
+}
+
 export function nearest(u, v, rounded) {
   let best
   let min = Infinity
