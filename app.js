@@ -704,10 +704,13 @@ round.addEventListener('change', () => refresh())
 latch.addEventListener('change', setLatch)
 
 // A control that keeps focus after a click would swallow the shortcuts, so
-// hand focus back. Tabbing to one still leaves its native keys working.
+// hand focus back. One reached by keyboard keeps it, so its own keys go on
+// working for as long as it is being used.
 for (const control of document.querySelectorAll('input, select, button')) {
   control.addEventListener('pointerup', () => control.blur())
-  control.addEventListener('change', () => control.blur())
+  control.addEventListener('change', () => {
+    if (!control.matches(':focus-visible')) control.blur()
+  })
 }
 
 const ARROWS = {
@@ -758,7 +761,9 @@ function silence() {
 }
 
 const ACTIONS = {
-  Space() {
+  // with Shift it silences everything
+  Backspace(event) {
+    if (event.shiftKey) return silence()
     latch.checked = !latch.checked
     setLatch()
   },
@@ -783,18 +788,35 @@ const ACTIONS = {
   Backquote() {
     round.checked = !round.checked
     refresh()
-  },
-  Escape: silence
+  }
 }
 
+// The keys a focused slider or menu needs for itself. Every other key still
+// plays, so tabbing through the controls does not switch the shortcuts off.
+// Space, Enter, and Esc are left to the browser, so they work as they do on
+// any page.
+const MOVE_KEYS = [
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown'
+]
+const ownKeys = (target) => (target.matches?.('select, input[type="range"]') ? MOVE_KEYS : [])
+
 window.addEventListener('keydown', (event) => {
-  if (event.code === 'Escape' && tracksOpen()) {
-    tracks.hidePopover()
+  // Esc shuts the song list and lets go of a focused control
+  if (event.code === 'Escape') {
+    if (tracksOpen()) tracks.hidePopover()
+    document.activeElement?.blur()
     return
   }
   if (event.ctrlKey || event.metaKey || event.altKey) return
-  if (event.target.matches('input, select, button')) return
   const { code } = event
+  if (ownKeys(event.target).includes(code)) return
 
   if (code in CYCLES) {
     event.preventDefault()
@@ -849,9 +871,9 @@ window.addEventListener('keydown', (event) => {
 
   if (code in ACTIONS) {
     event.preventDefault()
-    if (event.repeat && ['Space', 'Backquote'].includes(code)) return
+    if (event.repeat && ['Backspace', 'Backquote'].includes(code)) return
     wake()
-    ACTIONS[code]()
+    ACTIONS[code](event)
   }
 })
 

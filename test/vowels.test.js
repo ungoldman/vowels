@@ -133,7 +133,7 @@ test('four key rows of nine, plus a key for schwa', () => {
   assert.equal(KEY_POS.size, 37)
   assert.deepEqual(KEY_POS.get('Digit1'), [0, 0])
   assert.deepEqual(KEY_POS.get('Period'), [1, 1])
-  assert.deepEqual(KEY_POS.get('Enter'), [0.5, 0.5])
+  assert.deepEqual(KEY_POS.get('Digit0'), [0.5, 0.5])
 })
 
 test('two keys average to the symbols between rows', () => {

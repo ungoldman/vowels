@@ -201,7 +201,7 @@ export const KEY_POS = new Map(
   KEY_ROWS.flatMap((row, r) => row.map((code, c) => [code, [c / 8, r / 3]]))
 )
 // schwa sits between two rows, so it gets a key of its own
-KEY_POS.set('Enter', [0.5, 0.5])
+KEY_POS.set('Digit0', [0.5, 0.5])
 
 export const clamp = (n) => Math.min(1, Math.max(0, n))
 export const lerp = (a, b, t) => a + (b - a) * t
