@@ -35,6 +35,8 @@ const SEMITONE = 2 ** (1 / 12)
 // a short one sounds
 const SONG_SLIDE = 110
 const SONG_CUT = 0.6
+// the quiet between one song and the next, in ms
+const SONG_GAP = 2000
 
 const chart = document.getElementById('chart')
 const dot = document.getElementById('dot')
@@ -345,8 +347,8 @@ function stopSong() {
   showSong()
 }
 
-// Sing one of SONGS from a given beat, the tune in the page's own voice and
-// the two harmony parts in the choir's. Every note is timed from the start
+// Sing one of SONGS from a given beat, and the ones after it in turn, the
+// tune in the page's own voice and the two harmony parts in the choir's. Every note is timed from the start
 // so the beat cannot drift and the parts stay together. Notes of the tune in
 // one breath slide from vowel to vowel, and a note after a rest starts on its
 // vowel.
@@ -383,7 +385,17 @@ function playSong(index, from = 0) {
   run(chords.bass, (note) => choirSing(choir[0], note))
   run(chords.mid, (note) => choirSing(choir[1], note))
   run(notes, (note, at) => {
-    if (!note) return stopSong()
+    if (!note) {
+      if (index === SONGS.length - 1) return stopSong()
+      // a short quiet, then the next song, and so on through the last
+      songVoiced = false
+      gate()
+      songIndex = index + 1
+      songBeat = 0
+      showSong()
+      songTimers.push(setTimeout(() => playSong(songIndex), SONG_GAP))
+      return
+    }
     songBeat = at
     if (note.hz) {
       const [, u, v, rounded] = VOWELS.find(([symbol]) => symbol === note.symbol)
