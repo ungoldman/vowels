@@ -21,6 +21,8 @@ It needs Node 22.12 or later and a browser that supports audio worklets.
 
 Some values are estimates with no source behind them. `AGENTS.md` lists which.
 
+The songs are public domain tunes. The Credits link on the page names each one and the score or setting its notes were read from, and so does the comment beside each song in `vowels.js`.
+
 ## Contributing
 
 See `CONTRIBUTING.md` for conventions and `AGENTS.md` for how the code is laid out.

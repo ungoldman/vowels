@@ -4,8 +4,9 @@
 - run: `npm start`
 - test: `npm test`
 - coverage: `npm run coverage`
+- publish: `npm run site`
 
-Private and unpublished. Do not alter version.
+The repo is private. The page is published at ungoldman.com/vowels/. `npm run site` copies the four page files into a clone of the site repo beside this one, and pushing that repo deploys it. Do not alter version.
 
 Follow all coding and commit conventions in `CONTRIBUTING.md`.
 
