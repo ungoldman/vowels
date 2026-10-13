@@ -160,6 +160,8 @@ chart.addEventListener('pointercancel', release)
 
 const HOLD = 90,
   TRAVEL = 320
+// how long a slide between held keys takes
+const SLIDE = 260
 
 // Sit on the first vowel, travel, sit on the second. The ends can differ in
 // rounding, so the formants are blended directly and the dot just follows.
@@ -185,6 +187,22 @@ function glide(label, from, to) {
     )
     if (now - start < HOLD * 2 + TRAVEL) gliding = requestAnimationFrame(step)
     else gate()
+  }
+  gliding = requestAnimationFrame(step)
+}
+
+// Slide the dot from where it is to a new spot, sounding the way there. A
+// slide that interrupts another carries on from wherever that one had got to.
+function slide(to, ms = SLIDE) {
+  cancelAnimationFrame(gliding)
+  const from = pos
+  const start = performance.now()
+  const step = (now) => {
+    const t = clamp((now - start) / ms)
+    const eased = t * t * (3 - 2 * t)
+    pos = [0, 1].map((i) => lerp(from[i], to[i], eased))
+    refresh()
+    if (t < 1) gliding = requestAnimationFrame(step)
   }
   gliding = requestAnimationFrame(step)
 }
@@ -496,9 +514,13 @@ window.addEventListener('keydown', (event) => {
     wake()
     cancelAnimationFrame(gliding)
     if (!keys.includes(code)) keys.push(code)
-    pos = chord()
-    // slower than the pointer, so moving between keys glides
-    refresh(0.04)
+    // a key joining others slides there, which makes a diphthong of it
+    if (keys.length > 1) slide(chord())
+    else {
+      pos = chord()
+      // slower than the pointer, so moving between keys glides
+      refresh(0.04)
+    }
     gate()
     return
   }
@@ -535,10 +557,7 @@ window.addEventListener('keyup', (event) => {
   const i = keys.indexOf(code)
   if (i === -1) return
   keys.splice(i, 1)
-  if (keys.length) {
-    pos = chord()
-    refresh(0.04)
-  }
+  if (keys.length) slide(chord())
   gate()
 })
 
