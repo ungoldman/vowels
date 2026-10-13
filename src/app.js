@@ -924,6 +924,9 @@ window.addEventListener('blur', () => {
   gate()
 })
 
+// the dot and the readout show at once, and the sound follows when it loads
+refresh()
+
 ctx.audioWorklet.addModule('synth.js').then(() => {
   const voiceNode = () =>
     new AudioWorkletNode(ctx, 'vowel', { numberOfInputs: 0, outputChannelCount: [1] })
