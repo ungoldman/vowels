@@ -190,19 +190,23 @@ function follow(event) {
 chart.addEventListener('pointerdown', (event) => {
   // the caption is text to select, not somewhere to play
   if (event.target.closest('#caption')) return
+  if (event.button) return
   wake()
   cancelAnimationFrame(gliding)
   held = true
+  // a second finger takes over, and lifting the first then changes nothing
+  finger = event.pointerId
   chart.setPointerCapture(event.pointerId)
   follow(event)
   gate()
 })
 
 chart.addEventListener('pointermove', (event) => {
-  if (held) follow(event)
+  if (held && event.pointerId === finger) follow(event)
 })
 
-function release() {
+function release(event) {
+  if (event.pointerId !== finger) return
   held = false
   gate()
 }
@@ -775,6 +779,7 @@ function silence() {
   clearTimeout(ringTimer)
   randomHeld = false
   keys.length = 0
+  held = false
   cancelAnimationFrame(gliding)
   gate()
 }
