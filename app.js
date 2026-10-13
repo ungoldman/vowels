@@ -8,6 +8,7 @@ import {
   lerp,
   nearest,
   PHONATIONS,
+  SONGS,
   toUV,
   toXY,
   VOICES,
@@ -30,6 +31,10 @@ const NUDGE = 0.02
 const ARROW_DELAY = 300
 const ARROW_EVERY = 33
 const SEMITONE = 2 ** (1 / 12)
+// how long a song takes to slide between vowels, and how much of each note
+// a short one sounds
+const SONG_SLIDE = 110
+const SONG_CUT = 0.6
 
 const chart = document.getElementById('chart')
 const dot = document.getElementById('dot')
@@ -101,6 +106,29 @@ let sounding = false
 let held = false
 let gliding = 0
 const keys = []
+let songVoiced = false
+let songTimers = []
+let cutTimer = 0
+// which of SONGS is up, the beat its current note began on, and whether it
+// is running
+let songIndex = 0
+let songBeat = 0
+let songPlaying = false
+// The two voices that join in on a song, a bass and a middle voice, each
+// with a synth and a head of its own. The mix drops while they sing so three
+// voices do not clip.
+const choir = [VOICES.min, VOICES.low].map(({ scale }) => ({
+  scale,
+  node: null,
+  shape: { u: 0.5, v: 0.5, rounded: 0 },
+  sounding: false,
+  brow: 0
+}))
+const CHOIR_GAIN = 0.6
+const SONG_GAIN = 0.5
+let master
+// the pitch and rounding to put back when the song ends, set while it plays
+let songBefore = null
 const arrows = new Set()
 let arrowTimer = 0
 
@@ -119,15 +147,19 @@ const isRounded = () => round.checked
 function refresh(smooth) {
   const rounded = isRounded()
   sound(voiced(...pos, rounded), ...pos, nearest(...pos, rounded), rounded ? 1 : 0, smooth)
+  if (songPlaying) {
+    for (const singer of choir) if (singer.sounding) choirTune(singer)
+  } else accompany()
 }
 
 function voiceOn(on) {
   sounding = on
   send({ on })
+  accompany()
 }
 
 function gate() {
-  voiceOn(held || randomHeld || latch.checked || keys.length > 0)
+  voiceOn(held || randomHeld || songVoiced || latch.checked || keys.length > 0)
 }
 
 function follow(event) {
@@ -206,6 +238,227 @@ function slide(to, ms = SLIDE) {
   }
   gliding = requestAnimationFrame(step)
 }
+
+const songButton = document.getElementById('song')
+const player = document.getElementById('player')
+const pauseButton = document.getElementById('pause')
+
+// the deck beside the button shows only while a song is loaded
+function showSong() {
+  player.classList.toggle('playing', songBefore !== null)
+  document.getElementById('head').classList.toggle('singing', songBefore !== null)
+  songButton.setAttribute('aria-pressed', songBefore !== null)
+  document.getElementById('now').textContent = SONGS[songIndex].title
+  for (const [i, item] of [...tracks.children].entries()) {
+    item.setAttribute('aria-current', songBefore !== null && i === songIndex)
+  }
+  pauseButton.textContent = songPlaying ? '\u2759\u2759' : '\u25b8'
+  pauseButton.setAttribute('aria-label', songPlaying ? 'Pause' : 'Play')
+}
+
+// A choir voice takes the page's rounding, phonation, and source sliders,
+// as the main voice does. This sets its formants for the spot it is on.
+function choirTune(singer) {
+  const { u, v } = singer.shape
+  const rounded = isRounded()
+  singer.shape.rounded = rounded ? 1 : 0
+  singer.node?.port.postMessage({
+    formants: formants(u, v, rounded, singer.scale),
+    bandwidths: BANDWIDTHS,
+    smooth: 0.04
+  })
+}
+
+// While a song is paused the choir is still there, and it joins in with
+// whatever is played by hand: the same vowel, on the two notes that make a
+// major chord under the played one. The ratios are the pure ones, 4 to 5 to
+// 6, which ring smoother than the tempered notes a song uses. A note that
+// would fall under the pitch slider goes up an octave.
+const UNDER = [2 / 3, 5 / 6]
+function accompany() {
+  if (!songBefore || songPlaying) return
+  const f0 = pitch.value * PHONATIONS[phonation.value].pitch
+  choir.forEach((singer, i) => {
+    if (!sounding) {
+      if (singer.sounding) choirSing(singer)
+      return
+    }
+    const hz = f0 * UNDER[i] * (f0 * UNDER[i] < pitch.min ? 2 : 1)
+    singer.sounding = true
+    singer.shape = { u: pos[0], v: pos[1], rounded: 0 }
+    singer.brow = clamp((hz - pitch.min) / (pitch.max - pitch.min))
+    choirTune(singer)
+    singer.node?.port.postMessage({ on: true, f0: hz })
+  })
+}
+
+// one of the choir takes a note, or falls quiet on a rest or on nothing
+function choirSing(singer, note) {
+  singer.sounding = Boolean(note?.hz)
+  if (!singer.sounding) {
+    singer.node?.port.postMessage({ on: false })
+    return
+  }
+  const [, u, v] = VOWELS.find(([symbol]) => symbol === note.symbol)
+  singer.shape = { u, v, rounded: 0 }
+  singer.brow = clamp((note.hz - pitch.min) / (pitch.max - pitch.min))
+  choirTune(singer)
+  singer.node?.port.postMessage({ on: true, f0: note.hz * PHONATIONS[phonation.value].pitch })
+}
+
+// stop the notes and keep the place
+function pauseSong() {
+  for (const timer of songTimers) clearTimeout(timer)
+  songTimers = []
+  clearTimeout(cutTimer)
+  cancelAnimationFrame(gliding)
+  for (const singer of choir) choirSing(singer)
+  songPlaying = false
+  songVoiced = false
+  gate()
+  showSong()
+}
+
+function stopSong() {
+  if (!songBefore) return
+  pauseSong()
+  round.checked = songBefore.rounded
+  setPitch(songBefore.pitch)
+  songBefore = null
+  // they may have been joining in with a held note
+  for (const singer of choir) choirSing(singer)
+  master?.gain.setTargetAtTime(1, ctx.currentTime, 0.05)
+  // the button starts the one after this next time
+  songIndex = (songIndex + 1) % SONGS.length
+  songBeat = 0
+  refresh()
+  showSong()
+}
+
+// Sing one of SONGS from a given beat, the tune in the page's own voice and
+// the two harmony parts in the choir's. Every note is timed from the start
+// so the beat cannot drift and the parts stay together. Notes of the tune in
+// one breath slide from vowel to vowel, and a note after a rest starts on its
+// vowel.
+function playSong(index, from = 0) {
+  pauseSong()
+  wake()
+  songBefore ??= { pitch: pitch.value, rounded: round.checked }
+  master?.gain.setTargetAtTime(SONG_GAIN, ctx.currentTime, 0.05)
+  songIndex = index
+  songPlaying = true
+  showSong()
+  const { beat, short, notes, chords } = SONGS[index]
+  const start = performance.now()
+  // run one part, picking it up at the note that is sounding on the beat
+  const run = (part, sing) => {
+    let i = 0
+    let at = 0
+    while (part[i] && at + part[i].beats <= from) at += part[i++].beats
+    const next = () => {
+      const note = part[i++]
+      sing(note, at)
+      if (!note) return
+      at += note.beats
+      songTimers.push(setTimeout(next, start + (at - from) * beat - performance.now()))
+    }
+    next()
+  }
+  run(chords.bass, (note) => choirSing(choir[0], note))
+  run(chords.mid, (note) => choirSing(choir[1], note))
+  run(notes, (note, at) => {
+    if (!note) return stopSong()
+    songBeat = at
+    if (note.hz) {
+      const [, u, v, rounded] = VOWELS.find(([symbol]) => symbol === note.symbol)
+      setPitch(note.hz)
+      round.checked = rounded
+      if (songVoiced) slide([u, v], SONG_SLIDE)
+      else {
+        cancelAnimationFrame(gliding)
+        pos = [u, v]
+        refresh(0.04)
+      }
+      if (short) {
+        cutTimer = setTimeout(
+          () => {
+            songVoiced = false
+            gate()
+          },
+          note.beats * beat * SONG_CUT
+        )
+      }
+    }
+    songVoiced = note.hz > 0
+    gate()
+  })
+}
+
+const turn = (by) => playSong((songIndex + by + SONGS.length) % SONGS.length)
+songButton.addEventListener('click', () => {
+  // the click that ends a long press has already opened the list
+  if (pressedLong) pressedLong = false
+  else if (songBefore) stopSong()
+  else playSong(songIndex)
+})
+// a paused song picks up at the note it was cut off in
+pauseButton.addEventListener('click', () =>
+  songPlaying ? pauseSong() : playSong(songIndex, songBeat)
+)
+document.getElementById('prev').addEventListener('click', () => turn(-1))
+document.getElementById('next').addEventListener('click', () => turn(1))
+
+// A long press on the song button, or a right click, lists the songs to
+// pick from. The list is a popover that the page opens and shuts itself,
+// since one the browser shuts would close on the release of the long press.
+const tracks = document.getElementById('tracks')
+const LONG_PRESS = 450
+let pressTimer = 0
+let pressedLong = false
+SONGS.forEach(({ title }, i) => {
+  const item = document.createElement('button')
+  item.textContent = title
+  item.addEventListener('click', () => {
+    tracks.hidePopover()
+    playSong(i)
+  })
+  tracks.append(item)
+})
+const tracksOpen = () => tracks.matches(':popover-open')
+function openTracks() {
+  if (tracksOpen()) return
+  // by the button, left edges in line, on whichever side has more room
+  const { top, bottom, left } = songButton.getBoundingClientRect()
+  const above = top > window.innerHeight - bottom
+  tracks.style.left = `${left}px`
+  tracks.style.top = above ? 'auto' : `${bottom + 6}px`
+  tracks.style.bottom = above ? `${window.innerHeight - top + 6}px` : 'auto'
+  tracks.style.maxHeight = `${(above ? top : window.innerHeight - bottom) - 16}px`
+  tracks.showPopover()
+}
+songButton.addEventListener('pointerdown', () => {
+  pressedLong = false
+  pressTimer = setTimeout(() => {
+    pressedLong = true
+    openTracks()
+  }, LONG_PRESS)
+})
+for (const type of ['pointerup', 'pointerleave', 'pointercancel']) {
+  songButton.addEventListener(type, () => clearTimeout(pressTimer))
+}
+// a right click, the menu key, or a long touch where the browser sends this
+// in place of a click
+songButton.addEventListener('contextmenu', (event) => {
+  event.preventDefault()
+  clearTimeout(pressTimer)
+  pressedLong = false
+  openTracks()
+})
+document.addEventListener('pointerdown', (event) => {
+  if (tracksOpen() && !tracks.contains(event.target) && event.target !== songButton) {
+    tracks.hidePopover()
+  }
+})
 
 const other = (select) => {
   let i
@@ -299,6 +552,7 @@ function setPitch(hz) {
   const f0 = Number(pitch.value) * PHONATIONS[phonation.value].pitch
   document.getElementById('hz').textContent = Math.round(f0)
   send({ f0 })
+  accompany()
 }
 
 // The wheel over the chart bends the pitch, a semitone a notch. A trackpad
@@ -373,7 +627,7 @@ function sendSource() {
   const speaker = VOICES[voice.value]
   const rough = Number(fold.rough.value)
   showSource()
-  send({
+  const source = {
     openQuotient: Number(fold.openQuotient.value),
     tilt: Number(tilt.value),
     breath: Number(breath.value),
@@ -382,7 +636,9 @@ function sendSource() {
     shimmer: speaker.shimmer * rough,
     diplophonia: Number(fold.diplophonia.value),
     openBandwidth: Number(fold.openBandwidth.value)
-  })
+  }
+  send(source)
+  for (const singer of choir) singer.node?.port.postMessage(source)
 }
 
 function applyPresets() {
@@ -462,6 +718,7 @@ const CYCLES = {
 }
 
 function silence() {
+  stopSong()
   latch.checked = false
   clearInterval(cycleTimer)
   clearInterval(randomTimer)
@@ -503,6 +760,10 @@ const ACTIONS = {
 }
 
 window.addEventListener('keydown', (event) => {
+  if (event.code === 'Escape' && tracksOpen()) {
+    tracks.hidePopover()
+    return
+  }
   if (event.ctrlKey || event.metaKey || event.altKey) return
   if (event.target.matches('input, select, button')) return
   const { code } = event
@@ -591,8 +852,16 @@ window.addEventListener('blur', () => {
 })
 
 ctx.audioWorklet.addModule('synth.js').then(() => {
-  synth = new AudioWorkletNode(ctx, 'vowel', { numberOfInputs: 0, outputChannelCount: [1] })
-  synth.connect(ctx.destination)
+  const voiceNode = () =>
+    new AudioWorkletNode(ctx, 'vowel', { numberOfInputs: 0, outputChannelCount: [1] })
+  master = new GainNode(ctx)
+  master.connect(ctx.destination)
+  synth = voiceNode()
+  synth.connect(master)
+  for (const singer of choir) {
+    singer.node = voiceNode()
+    singer.node.connect(new GainNode(ctx, { gain: CHOIR_GAIN })).connect(master)
+  }
   // catch up on anything set while the module was loading
   setPitch(pitch.value)
   sendSource()
@@ -613,6 +882,9 @@ ctx.audioWorklet.addModule('synth.js').then(() => {
 // wider. All of it swells and settles on a slow breathing cycle.
 // It is a cartoon of the visible articulators, not a measured model, and
 // the tongue, which does most of the work, cannot be seen from the front.
+// Two smaller heads sit either side of it, each turned a little outward.
+// They are the choir's. They fade in when a song starts, each mouths its
+// own part, and they fade out when it is over.
 const FACE_X = 45,
   FACE_Y = 258
 // roughly where the narrow layout puts the face, in the chart's coordinates
@@ -653,10 +925,36 @@ function strain() {
   const db = Number(tilt.value)
   return db < 4 ? 1 - db / 4 : -clamp((db - 6) / 12)
 }
-const head = Object.fromEntries(
-  ['mesh', 'nodes', 'outline', 'features', 'mouth'].map((id) => [id, document.getElementById(id)])
-)
-const face = {
+const SVG = 'http://www.w3.org/2000/svg'
+// the paths of one head, back to front
+const HEAD_PATHS = ['mesh', 'nodes', 'outline', 'features', 'mouth']
+// where a side head sits from the main one, clear of it, its size, and its
+// turn in radians
+const SIDE_X = 75,
+  SIDE_Y = 12,
+  SIDE_SCALE = 0.42,
+  SIDE_YAW = 0.25
+// how far the middle of the face stands out from its edge, for the turn
+const HEAD_DEPTH = 34
+// a side head is drawn where the main one is, then shrunk and moved by its group
+function sideHead(side) {
+  const group = document.createElementNS(SVG, 'g')
+  group.setAttribute('class', 'side-head')
+  group.setAttribute(
+    'transform',
+    `translate(${FACE_X + side * SIDE_X} ${FACE_Y + SIDE_Y}) scale(${SIDE_SCALE}) translate(${-FACE_X} ${-FACE_Y})`
+  )
+  document.getElementById('head').prepend(group)
+  return Object.fromEntries(
+    HEAD_PATHS.map((name) => {
+      const path = document.createElementNS(SVG, 'path')
+      path.setAttribute('class', name)
+      group.append(path)
+      return [name, path]
+    })
+  )
+}
+const restingFace = () => ({
   open: 0,
   width: 0.8,
   lips: 0,
@@ -670,8 +968,19 @@ const face = {
   flare: 0,
   effort: strain(),
   air: 0
-}
-const speed = Object.fromEntries(Object.keys(face).map((key) => [key, 0]))
+})
+// the main head first, then the choir's, each with its own springs
+const heads = [
+  { paths: Object.fromEntries(HEAD_PATHS.map((id) => [id, document.getElementById(id)])), yaw: 0 },
+  ...choir.map((singer, i) => ({
+    paths: sideHead(i ? 1 : -1),
+    yaw: (i ? 1 : -1) * SIDE_YAW,
+    singer
+  }))
+].map((head) => {
+  const face = restingFace()
+  return { ...head, face, speed: Object.fromEntries(Object.keys(face).map((key) => [key, 0])) }
+})
 let lastFrame = performance.now()
 let nextBlink = performance.now() + BLINK_EVERY
 // where the pointer last was over the page, in the chart's coordinates
@@ -718,12 +1027,12 @@ const EDGES = [
 ].map((edge) => edge.split(' '))
 const OUTLINE = ['crown', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'chin']
 
-function faceTarget(now) {
+// what one head should look like now, given the part it sings
+function faceTarget(now, { shape, sounding, brow }) {
   const { u, v, rounded } = shape
   const spread = 1 - 0.15 * v - 0.12 * u
   const pursed = 0.32 + 0.25 * v
   if (now > nextBlink + BLINK_FOR) nextBlink = now + BLINK_EVERY * (0.5 + Math.random())
-  const brow = (pitch.value - pitch.min) / (pitch.max - pitch.min)
   // the eyes go to the dot while it sounds, and wander after the pointer when idle
   const [lookX, lookY] = !sounding && pointer ? pointer : toXY(u, v)
   // on a narrow screen the face sits under the chart, so it looks up at it
@@ -754,7 +1063,7 @@ function faceTarget(now) {
   }
 }
 
-function facePoints(now) {
+function facePoints(face, now) {
   const jaw = 10 * face.jaw
   const lift = 6 * face.brow
   const lid = Math.max(0, face.lid) * (1 - face.blink)
@@ -844,10 +1153,15 @@ function facePoints(now) {
   }
 }
 
-function drawFace(now) {
-  const target = faceTarget(now)
-  const dt = Math.min(0.05, (now - lastFrame) / 1000)
-  lastFrame = now
+function drawHead({ paths, face, speed, yaw, singer }, now, dt) {
+  const target = faceTarget(
+    now,
+    singer ?? {
+      shape,
+      sounding,
+      brow: (pitch.value - pitch.min) / (pitch.max - pitch.min)
+    }
+  )
   // A critically damped spring per value, solved exactly so a long frame
   // cannot blow it up. It eases in as well as out, and a change of target
   // mid-move bends the motion instead of restarting it.
@@ -860,8 +1174,15 @@ function drawFace(now) {
     speed[key] = (speed[key] - rate * push) * decay
   }
 
-  const p = facePoints(now)
-  const at = ([x, y]) => `${(FACE_X + x).toFixed(1)},${(FACE_Y + y).toFixed(1)}`
+  const p = facePoints(face, now)
+  const across = Math.cos(yaw)
+  const forward = Math.sin(yaw)
+  // A turned head is the flat face bent over a dome and seen from the side,
+  // so the near half widens, the far half narrows, and the nose leads.
+  const at = ([x, y]) => {
+    const z = HEAD_DEPTH * Math.sqrt(Math.max(0, 1 - (x / 50) ** 2))
+    return `${(FACE_X + x * across + z * forward).toFixed(1)},${(FACE_Y + y).toFixed(1)}`
+  }
   const flip = ([x, y]) => [-x, y]
   const ring = (points) => `M${points.map(at).join('L')}Z`
   const line = (a, b) => `M${at(a)}L${at(b)}`
@@ -874,12 +1195,12 @@ function drawFace(now) {
   const rings = (points) => ring(points) + ring(points.map(flip))
   const names = (...list) => list.map((name) => p[name])
 
-  head.mesh.setAttribute('d', EDGES.map(([a, b]) => both(line)(p[a], p[b])).join(''))
-  head.nodes.setAttribute(
+  paths.mesh.setAttribute('d', EDGES.map(([a, b]) => both(line)(p[a], p[b])).join(''))
+  paths.nodes.setAttribute(
     'd',
     [...new Set(EDGES.flat())].map((name) => both(node)(p[name])).join('')
   )
-  head.outline.setAttribute(
+  paths.outline.setAttribute(
     'd',
     ring([
       ...names(...OUTLINE),
@@ -888,7 +1209,7 @@ function drawFace(now) {
         .reverse()
     ])
   )
-  head.features.setAttribute(
+  paths.features.setAttribute(
     'd',
     [
       rings(names('e1', 'e2o', 'e2', 'e2i', 'e3', 'e4i', 'e4', 'e4o')),
@@ -900,7 +1221,7 @@ function drawFace(now) {
       ...p.pupils.map(ring)
     ].join('')
   )
-  head.mouth.setAttribute(
+  paths.mouth.setAttribute(
     'd',
     [
       ring([
@@ -915,14 +1236,17 @@ function drawFace(now) {
       ])
     ].join('')
   )
-  head.mouth.style.setProperty('--voice', face.voice.toFixed(2))
+  paths.mouth.style.setProperty('--voice', face.voice.toFixed(2))
+}
 
+function drawFace(now) {
+  const dt = Math.min(0.05, (now - lastFrame) / 1000)
+  lastFrame = now
+  for (const head of heads) drawHead(head, now, dt)
   requestAnimationFrame(drawFace)
 }
 
 requestAnimationFrame(drawFace)
-
-const SVG = 'http://www.w3.org/2000/svg'
 
 const keycaps = document.getElementById('keycaps')
 const keyName = (code) => ({ Comma: ',', Period: '.' })[code] ?? code.replace(/^(Key|Digit)/, '')

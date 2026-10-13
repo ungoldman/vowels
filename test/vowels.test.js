@@ -7,11 +7,14 @@ import {
   describe,
   formants,
   geo,
+  harmony,
   KEY_POS,
   KEY_ROWS,
   lerp,
   nearest,
+  noteHz,
   PHONATIONS,
+  SONGS,
   toUV,
   toXY,
   VOICES,
@@ -167,4 +170,92 @@ test('symbols are named as the IPA names them', () => {
   assert.equal(describe('ɐ'), 'near-open central')
   assert.equal(describe('aɪ'), '')
   for (const [symbol] of VOWELS) assert.doesNotMatch(describe(symbol), /undefined/)
+})
+
+test('note names give equal-tempered pitches', () => {
+  assert.equal(noteHz('A4'), 440)
+  assert.equal(noteHz('A2'), 110)
+  assert.ok(Math.abs(noteHz('C4') - 261.63) < 0.01)
+  assert.ok(Math.abs(noteHz('C#3') - 138.59) < 0.01)
+  assert.ok(Math.abs(noteHz('Bb3') - 233.08) < 0.01)
+})
+
+test('each song is whole bars the synth can sing', () => {
+  // beats in each song, in the order the player lists them
+  const BEATS = [64, 48, 32, 64, 64, 98, 48, 44, 64, 64, 72, 64, 57]
+  assert.equal(SONGS.length, BEATS.length)
+  SONGS.forEach(({ title, beat, notes, chords }, i) => {
+    assert.ok(title && beat > 0)
+    assert.equal(
+      notes.reduce((sum, note) => sum + note.beats, 0),
+      BEATS[i],
+      title
+    )
+    // the two harmony parts run as long as the tune, on notes their vowels can carry
+    for (const part of [chords.bass, chords.mid]) {
+      assert.equal(
+        part.reduce((sum, note) => sum + note.beats, 0),
+        BEATS[i],
+        title
+      )
+      for (const { hz, symbol } of part) {
+        if (!hz) continue
+        const [, u, v, rounded] = VOWELS.find(([other]) => other === symbol)
+        assert.ok(hz >= 73 && hz < formants(u, v, rounded, 0.9)[0], `${title} ${hz} Hz`)
+      }
+    }
+    for (const { hz, symbol } of notes) {
+      if (!hz) continue
+      const [, u, v, rounded] = VOWELS.find(([other]) => other === symbol)
+      // on the pitch slider, and under the vowel's first formant
+      assert.ok(hz >= 70 && hz <= 320, `${title} ${hz} Hz`)
+      assert.ok(hz < formants(u, v, rounded)[0], `${title} ${symbol} at ${hz} Hz`)
+    }
+  })
+})
+
+const beatsOf = (part) => part.map((note) => note.beats)
+const pitches = (part) =>
+  part.map(({ hz }) => {
+    const names = ['D2', 'E2', 'G2', 'A2', 'C3', 'C#3', 'E3', 'F3', 'F#3']
+    return hz ? names.find((name) => Math.abs(hz - noteHz(name)) < 1e-9) : '-'
+  })
+
+test('the harmony calls and answers, then moves, then holds the last chord', () => {
+  const { bass, mid } = harmony('Dm/4 Dm/4 Dm/4 Dm/4')
+  assert.deepEqual(pitches(bass), ['D2', '-', 'D2', '-', 'D2', 'A2', 'D2'])
+  assert.deepEqual(beatsOf(bass), [2, 2, 2, 2, 2, 2, 4])
+  assert.deepEqual(pitches(mid), ['-', 'F3', '-', 'F3', 'F3', 'F3'])
+  assert.deepEqual(beatsOf(mid), [2, 2, 2, 2, 4, 4])
+  // a note that comes straight back changes vowel, so it is heard again
+  assert.notEqual(mid[4].symbol, mid[3].symbol)
+})
+
+test('in three the bass takes the first beat, and each part moves in turn', () => {
+  const { bass, mid } = harmony('A/3 A/3 A/3 A/3 A/3 A/3 A/3 A/3')
+  assert.deepEqual(beatsOf(bass), [1, 2, 1, 2, 1, 2, 1, 2, 1.5, 1.5, 3, 1, 2, 3])
+  assert.deepEqual(pitches(bass).slice(8, 11), ['A2', 'E2', 'A2'])
+  assert.deepEqual(beatsOf(mid).slice(8), [3, 1.5, 1.5, 1, 2, 3])
+  // the middle voice starts on the third, and steps to the fifth and stays
+  assert.deepEqual(pitches(mid).slice(8), ['C#3', 'C#3', 'E3', '-', 'E3', 'E3'])
+})
+
+test('short chords are sung whole, and a rest silences both parts', () => {
+  const { bass, mid } = harmony('D/1 -/1 D/1 D/1 -/1')
+  assert.deepEqual(pitches(bass), ['D2', '-', 'D2', 'D2', '-'])
+  assert.deepEqual(pitches(mid), ['F#3', '-', 'F#3', 'F#3', '-'])
+})
+
+test('given the tune, the middle voice sings along under it in its rhythm', () => {
+  const tune = [
+    { hz: 0, beats: 4 },
+    { hz: noteHz('E3'), beats: 2 },
+    { hz: noteHz('A2'), beats: 1 },
+    { hz: 0, beats: 9 }
+  ]
+  const { bass, mid } = harmony('C/4 C/4 C/4 C/4', tune)
+  assert.deepEqual(pitches(bass), ['C3', '-', 'C3', 'C3', 'G2', 'C3'])
+  // a third under E3, then above a note too low to sing under, then the tune's rest
+  assert.deepEqual(pitches(mid), ['-', 'E3', 'C3', 'C3', '-', 'E3', 'E3'])
+  assert.deepEqual(beatsOf(mid), [2, 2, 2, 1, 1, 4, 4])
 })

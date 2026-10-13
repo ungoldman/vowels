@@ -14,9 +14,9 @@ Omit AI attribution in commits (Co-authored-by). Polluting git history with AI a
 ## Layout
 
 - `index.html` is the markup and styles. The page is these four files and nothing else, with relative paths, so it can be dropped into a subdirectory of a static site.
-- `vowels.js` is the chart as data and arithmetic: symbol positions, formant values, voices, phonations, and the key map. It touches no DOM.
+- `vowels.js` is the chart as data and arithmetic: symbol positions, formant values, voices, phonations, the key map, and the songs. It touches no DOM.
 - `synth.js` is the synthesizer, a cascade of formant resonators after Klatt. `VowelSynth` renders in Node as well as in an audio worklet.
-- `app.js` wires the page: pointer and key input, the controls, the random shuffle, and the face.
+- `app.js` wires the page: pointer and key input, the controls, the random shuffle, the songs, and the face.
 - `server.js` and `start.js` are the local dev server. `start.js` is the entry and is covered by a spawn test only.
 
 ## Estimates
