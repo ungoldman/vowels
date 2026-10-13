@@ -136,8 +136,6 @@
   section { display: grid; gap: 8px; }
   h2 { display: flex; gap: 1.5ch; margin: 0; font-size: 10px; font-weight: 400; letter-spacing: 0.3em; text-transform: uppercase; color: var(--faint); }
   h2 button { order: 1; }
-  .note { margin: 0; font-size: 11px; letter-spacing: 0.02em; color: var(--faint); }
-  /* a control with a few words beside it saying what it does */
   .extra { display: flex; align-items: center; gap: 1.5ch; }
   label {
     display: inline-flex;
@@ -229,7 +227,16 @@
     /* the chart takes whatever height the rest of the stage leaves */
     #stage { position: sticky; top: 0; height: 100dvh; grid-template-rows: auto minmax(0, 1fr); }
     #chart { height: 100%; aspect-ratio: auto; max-height: none; }
-    #panel { align-self: stretch; margin: 12px 0; padding: 0 0 0 20px; border-top: 0; border-left: 1px solid rgba(255, 255, 255, 0.12); }
+    #panel { align-self: stretch; margin: 8px 0; padding: 0 0 0 20px; border-top: 0; border-left: 1px solid rgba(255, 255, 255, 0.12); }
+    /* packed so the whole panel shows in a 1080p browser window without scrolling */
+    #panel { gap: 9px; }
+    #panel section { gap: 4px; }
+    #panel .slider input { height: 14px; }
+    #panel button { padding: 2px 9px; }
+    #panel button.small { padding: 0 8px; }
+    #panel select { padding: 1px 6px; }
+    #keys th { padding: 0 2ch 0 0; }
+    #keys td { padding: 0; }
     #more, #portrait, #quick, #readout { display: none; }
   }
   /* every screen the rule above leaves out */
@@ -260,7 +267,6 @@
     #transport { align-self: start; gap: 8px 10px; }
     #quick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
     #quick .slider { grid-template-columns: auto minmax(0, 1fr); }
-    section > .note { display: none; }
     /* The sheet stops under the face, so the chart, the face, and the row
        beside it stay in view. 228px is the stage down to there, less its
        chart. It is packed tight so all of it shows on a 390 by 844 phone,
@@ -381,7 +387,6 @@
       </select>
     </label>
     <label class="slider"><span class="name">Pitch <kbd>-</kbd> <kbd>=</kbd></span> <input type="range" id="pitch" min="70" max="320" value="120"> <span id="hz" class="value" data-unit=" Hz">120</span></label>
-    <p class="note">A voice sets its own pitch and phonation.</p>
   </section>
 
   <section>
@@ -410,7 +415,6 @@
     </div>
     <div class="extra">
       <label><button id="random">Random</button> <kbd>/</kbd></label>
-      <p class="note">a new vowel or glide</p>
     </div>
     <div id="player">
       <button id="song" aria-label="Music" aria-pressed="false" title="Hold to pick a song">&#9834;</button>
