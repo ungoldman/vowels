@@ -112,7 +112,7 @@
   #readout > span:first-child { display: inline-flex; align-items: baseline; }
   #symbol { font: 18px/1 var(--ipa); margin-right: 1.5ch; }
   #formants { color: var(--dim); }
-  /* what is played and whether it sounds */
+  /* the one control a phone keeps beside the face */
   #transport { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
   #panel {
     display: flex;
@@ -125,6 +125,8 @@
   h2 { display: flex; gap: 1.5ch; margin: 0; font-size: 10px; font-weight: 400; letter-spacing: 0.3em; text-transform: uppercase; color: var(--faint); }
   h2 button { order: 1; }
   .note { margin: 0; font-size: 11px; letter-spacing: 0.02em; color: var(--faint); }
+  /* a control with a few words beside it saying what it does */
+  .extra { display: flex; align-items: center; gap: 1.5ch; }
   label {
     display: inline-flex;
     align-items: center;
@@ -182,7 +184,9 @@
     border: 1px solid #333;
     border-radius: 3px;
   }
-  #keys { margin: 0; font-size: 11px; letter-spacing: 0.02em; color: var(--dim); }
+  #keys { border-collapse: collapse; font-size: 11px; letter-spacing: 0.02em; color: var(--dim); }
+  #keys th { padding: 2px 2ch 2px 0; font-weight: 400; text-align: left; white-space: nowrap; color: var(--fg); }
+  #keys td { padding: 2px 0; }
   @media (min-width: 860px), (orientation: landscape) and (min-width: 620px) {
     body { grid-template-columns: minmax(0, 1fr) 330px; column-gap: 20px; }
     /* the chart takes whatever height the rest of the stage leaves */
@@ -199,7 +203,7 @@
     #readout { grid-area: 3 / 2; }
     #transport { grid-area: 4 / 2; }
     #quick { grid-row: 5; }
-    #play { display: none; }
+    #vowel { display: none; }
     /* cropped to the frame, which app.js matches in the viewBox */
     #chart { aspect-ratio: 553 / 405; }
     .side, #caption { display: none; }
@@ -218,7 +222,7 @@
     #transport { align-self: start; gap: 8px 10px; }
     #quick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
     #quick .slider { grid-template-columns: auto minmax(0, 1fr); }
-    .note { display: none; }
+    section > .note { display: none; }
     /* The sheet stops under the face, so the chart, the face, and the row
        beside it stay in view. 228px is the stage down to there, less its
        chart. It is packed tight so all of it shows on a 390 by 844 phone,
@@ -264,7 +268,7 @@
     button { min-width: 44px; }
     button.small { min-height: 30px; }
     #more { min-height: 32px; }
-    .slider, #transport label { min-height: 36px; }
+    .slider, #transport label, .extra label { min-height: 36px; }
     #panel { gap: 18px; }
   }
   /* nothing about the keyboard where there is not one */
@@ -319,12 +323,10 @@
 </div>
 
 <div id="panel">
-  <section id="play">
-    <h2>Play</h2>
+  <section id="vowel">
+    <h2>Vowel</h2>
     <div id="transport">
       <label><input type="checkbox" id="round"> Rounded <kbd>`</kbd></label>
-      <label><input type="checkbox" id="latch"> Hold <kbd>Space</kbd></label>
-      <label><button id="random">Random</button> <kbd>/</kbd></label>
     </div>
   </section>
 
@@ -340,7 +342,7 @@
       </select>
     </label>
     <label class="slider"><span class="name">Pitch <kbd>-</kbd> <kbd>=</kbd></span> <input type="range" id="pitch" min="70" max="320" value="120"> <span id="hz" class="value" data-unit=" Hz">120</span></label>
-    <p class="note">A voice brings its own pitch and leans on the phonation sliders.</p>
+    <p class="note">A voice sets its own pitch and phonation.</p>
   </section>
 
   <section>
@@ -362,16 +364,30 @@
     <label class="slider"><span class="name">F1 damping</span> <input type="range" id="openBandwidth" min="0" max="300" step="10" value="0"> <span class="value" data-unit=" Hz"></span></label>
   </section>
 
+  <section>
+    <h2>Advanced</h2>
+    <div class="extra">
+      <label><input type="checkbox" id="latch"> Hold <kbd>Space</kbd></label>
+      <p class="note">sound stays on</p>
+    </div>
+    <div class="extra">
+      <label><button id="random">Random</button> <kbd>/</kbd></label>
+      <p class="note">a new vowel or glide</p>
+    </div>
+  </section>
+
   <section class="keys">
     <h2>Keys</h2>
-    <p id="keys">
-      The small letters on the chart are keys, each plays its spot while held, and two together play the point between them.
-      Arrow keys move the dot, and two together move it diagonally.
-      <kbd>Shift</kbd> with <kbd>\</kbd> or <kbd>P</kbd> steps backward.
-      <kbd>Shift</kbd> with <kbd>/</kbd> or Random also shuffles every setting.
-      Holding <kbd>\</kbd>, <kbd>P</kbd>, or <kbd>/</kbd> keeps stepping.
-      <kbd>Esc</kbd> silences everything.
-    </p>
+    <table id="keys">
+      <tr><th scope="row">Chart keys</th><td>play that spot</td></tr>
+      <tr><th scope="row">Two at once</th><td>slide between them</td></tr>
+      <tr><th scope="row">Arrows</th><td>move the dot</td></tr>
+      <tr><th scope="row">Wheel</th><td>bend the pitch</td></tr>
+      <tr><th scope="row"><kbd>Shift</kbd> <kbd>\</kbd> <kbd>P</kbd></th><td>step backward</td></tr>
+      <tr><th scope="row"><kbd>Shift</kbd> <kbd>/</kbd></th><td>shuffle every setting</td></tr>
+      <tr><th scope="row">Hold <kbd>\</kbd> <kbd>P</kbd> <kbd>/</kbd></th><td>keep stepping</td></tr>
+      <tr><th scope="row"><kbd>Esc</kbd></th><td>silence</td></tr>
+    </table>
   </section>
 </div>
 
