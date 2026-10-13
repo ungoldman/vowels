@@ -182,7 +182,7 @@ test('note names give equal-tempered pitches', () => {
 
 test('each song is whole bars the synth can sing', () => {
   // beats in each song, in the order the player lists them
-  const BEATS = [64, 48, 32, 64, 64, 98, 48, 44, 64, 64, 72, 64, 57]
+  const BEATS = [64, 98, 64, 32, 64, 48, 64, 72, 48, 64, 57, 44, 64]
   assert.equal(SONGS.length, BEATS.length)
   SONGS.forEach(({ title, beat, notes, chords }, i) => {
     assert.ok(title && beat > 0)
