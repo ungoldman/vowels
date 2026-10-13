@@ -161,7 +161,7 @@ test('the pitch wanders a little, and not at all when told not to', () => {
   assert.ok(level(x, 2000) > level(x, 2020) + 6)
 })
 
-test('a note starts under its pitch, settles, and falls as it ends', () => {
+test('a note starts under its pitch, settles, and holds it as it ends', () => {
   // count pulses by the flips of the alternate-pulse flag
   const pulses = (synth, blocks) => {
     let count = 0
@@ -180,7 +180,11 @@ test('a note starts under its pitch, settles, and falls as it ends', () => {
   const settled = pulses(synth, 30)
   synth.set({ on: false })
   const late = pulses(synth, 30)
-  assert.ok(early < settled && late < settled, `${early} ${settled} ${late}`)
+  assert.ok(early < settled, `${early} ${settled}`)
+  assert.ok(Math.abs(late - settled) <= 1, `${late} ${settled}`)
+  // once it has died away, the next note scoops again
+  render(synth, 400)
+  assert.equal(synth.settle, 0)
 })
 
 test('a formant above half the sample rate is left out', () => {

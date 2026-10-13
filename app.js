@@ -129,6 +129,8 @@ const SONG_GAIN = 0.5
 let master
 // the pitch and rounding to put back when the song ends, set while it plays
 let songBefore = null
+// the same, with the timer that will put them back, just after a song ends
+let songAfter = null
 const arrows = new Set()
 let arrowTimer = 0
 
@@ -322,16 +324,24 @@ function pauseSong() {
 function stopSong() {
   if (!songBefore) return
   pauseSong()
-  round.checked = songBefore.rounded
-  setPitch(songBefore.pitch)
+  const before = songBefore
   songBefore = null
+  // The pitch and rounding go back once the last note has died away, or it
+  // would be heard sliding to them. A note held by hand takes them at once.
+  const restore = () => {
+    songAfter = null
+    round.checked = before.rounded
+    setPitch(before.pitch)
+    refresh()
+  }
+  if (sounding) restore()
+  else songAfter = { before, timer: setTimeout(restore, RING) }
   // they may have been joining in with a held note
   for (const singer of choir) choirSing(singer)
   master?.gain.setTargetAtTime(1, ctx.currentTime, 0.05)
   // the button starts the one after this next time
   songIndex = (songIndex + 1) % SONGS.length
   songBeat = 0
-  refresh()
   showSong()
 }
 
@@ -343,6 +353,12 @@ function stopSong() {
 function playSong(index, from = 0) {
   pauseSong()
   wake()
+  // a song started while the last one's settings are still to go back keeps them
+  if (songAfter) {
+    clearTimeout(songAfter.timer)
+    songBefore = songAfter.before
+    songAfter = null
+  }
   songBefore ??= { pitch: pitch.value, rounded: round.checked }
   master?.gain.setTargetAtTime(SONG_GAIN, ctx.currentTime, 0.05)
   songIndex = index

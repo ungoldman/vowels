@@ -84,7 +84,7 @@ export class VowelSynth {
       diplophonia: 0,
       // spread of the slow wander in pitch, as a share of the pitch
       drift: 0.005,
-      // how far under its pitch a note starts, and falls back as it ends
+      // how far under its pitch a note starts
       scoop: 0.05,
       // Hz added to the F1 bandwidth while the glottis is open, since an
       // open glottis lets energy leak down into the lungs
@@ -169,7 +169,10 @@ export class VowelSynth {
       this.f0 += (target.f0 - this.f0) * glideK
       this.voicing += (target.voicing - this.voicing) * glideK
       this.level += (goal - this.level) * levelK
-      this.settle += (goal - this.settle) * settleK
+      // The scoop is on the way in only. The pitch holds while a note dies
+      // away, and the next one scoops again once this one has gone.
+      if (goal) this.settle += (1 - this.settle) * settleK
+      else if (this.level < 1e-3) this.settle = 0
       const scoop = 1 - target.scoop * (1 - this.settle)
       const dt = (this.f0 * flutter * drift * scoop * this.periodRate) / rate
       this.phase += dt
