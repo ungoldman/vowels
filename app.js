@@ -301,6 +301,23 @@ function setPitch(hz) {
   send({ f0 })
 }
 
+// The wheel over the chart bends the pitch, a semitone a notch. A trackpad
+// sends many small deltas, so they add up until they make a notch of 100.
+// Firefox counts a mouse wheel in lines, three to a notch.
+let wheel = 0
+chart.addEventListener(
+  'wheel',
+  (event) => {
+    event.preventDefault()
+    wheel -= event.deltaY * (event.deltaMode === 1 ? 100 / 3 : 1)
+    const notches = Math.trunc(wheel / 100)
+    if (!notches) return
+    wheel -= notches * 100
+    setPitch(Math.round(pitch.value * SEMITONE ** notches))
+  },
+  { passive: false }
+)
+
 // A narrow screen takes the face out of the chart and the one-tap controls
 // out of the panel, and crops the chart to its frame. Each mover leaves a
 // marker at home to come back to. The query is index.html's narrow rule.
