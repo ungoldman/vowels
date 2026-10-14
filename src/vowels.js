@@ -112,7 +112,7 @@ export const VOICES = {
     shimmer: 0.035
   },
   mid: {
-    scale: 1.18,
+    scale: 1.1645744139360892,
     pitch: 210,
     openQuotient: 0.1,
     tilt: 4,
@@ -121,7 +121,7 @@ export const VOICES = {
     shimmer: 0.035
   },
   high: {
-    scale: 1.39,
+    scale: 1.3564525297938033,
     pitch: 265,
     openQuotient: 0.1,
     tilt: 3,
