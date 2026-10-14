@@ -1028,10 +1028,15 @@ const heads = [
   }))
 ].map((head) => {
   const face = restingFace()
-  return { ...head, face, speed: Object.fromEntries(Object.keys(face).map((key) => [key, 0])) }
+  return {
+    ...head,
+    face,
+    speed: Object.fromEntries(Object.keys(face).map((key) => [key, 0])),
+    // each head keeps its own clock, so the three do not blink as one
+    nextBlink: performance.now() + BLINK_EVERY * (0.5 + Math.random())
+  }
 })
 let lastFrame = performance.now()
-let nextBlink = performance.now() + BLINK_EVERY
 // where the pointer last was, in chart coordinates
 let pointer = null
 
@@ -1076,11 +1081,10 @@ const EDGES = [
 ].map((edge) => edge.split(' '))
 const OUTLINE = ['crown', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'chin']
 
-function faceTarget(now, { shape, sounding, brow }) {
+function faceTarget({ shape, sounding, brow }, blinking) {
   const { u, v, rounded } = shape
   const spread = 1 - 0.15 * v - 0.12 * u
   const pursed = 0.32 + 0.25 * v
-  if (now > nextBlink + BLINK_FOR) nextBlink = now + BLINK_EVERY * (0.5 + Math.random())
   // eyes go to the dot while it sounds, and follow the pointer when idle
   const [lookX, lookY] = !sounding && pointer ? pointer : toXY(u, v)
   // on a narrow screen the face sits under the chart and looks up at it
@@ -1106,7 +1110,7 @@ function faceTarget(now, { shape, sounding, brow }) {
     effort,
     air,
     voice: sounding ? 1 : 0,
-    blink: !still && now > nextBlink ? 1 : 0
+    blink: !still && blinking ? 1 : 0
   }
 }
 
@@ -1200,14 +1204,16 @@ function facePoints(face, now) {
   }
 }
 
-function drawHead({ paths, face, speed, yaw, singer }, now, dt) {
+function drawHead(head, now, dt) {
+  const { paths, face, speed, yaw, singer } = head
+  if (now > head.nextBlink + BLINK_FOR) head.nextBlink = now + BLINK_EVERY * (0.5 + Math.random())
   const target = faceTarget(
-    now,
     singer ?? {
       shape,
       sounding,
       brow: browOf(pitch.value)
-    }
+    },
+    now > head.nextBlink
   )
   // A critically damped spring per value, solved exactly so a long frame cannot
   // blow it up. A change of target mid-move bends the motion.
