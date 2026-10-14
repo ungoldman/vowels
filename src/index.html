@@ -186,9 +186,10 @@
   /* a long press opens the song list, so the press must not select or call up a menu */
   #song { opacity: 0.65; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   #song:hover, #song:focus-visible, #song[aria-pressed="true"] { opacity: 1; }
-  /* a link at the foot of the panel, and the sheet of credits it opens */
-  #credit { align-self: flex-end; margin-top: auto; padding: 0; border: 0; font-size: 10px; letter-spacing: 0; color: var(--dim); text-decoration: underline; text-underline-offset: 3px; }
-  #credit:hover, #credit:focus-visible { color: var(--fg); background: none; }
+  /* links at the foot of the panel, and the sheet of credits one opens */
+  #foot { display: flex; align-items: center; gap: 12px; align-self: flex-end; margin-top: auto; }
+  #foot > * { padding: 0; border: 0; font-size: 10px; letter-spacing: 0; color: var(--dim); text-decoration: underline; text-underline-offset: 3px; }
+  #foot > :hover, #foot > :focus-visible { color: var(--fg); background: none; }
   #credits { width: min(560px, calc(100vw - 32px)); max-height: 82dvh; padding: 16px 20px; overflow-y: auto; color: var(--fg); background: #0b0b0d; border: 1px solid var(--rule); border-radius: 10px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8); font-size: 12px; line-height: 1.5; }
   #credits::backdrop { background: rgba(0, 0, 0, 0.6); }
   #credits h2 { justify-content: space-between; align-items: center; }
@@ -438,7 +439,10 @@
   </section>
   <div id="tracks" popover="manual" aria-label="Songs"></div>
 
-  <button id="credit" popovertarget="credits">Credits</button>
+  <div id="foot">
+    <a href="https://github.com/ungoldman/vowels">Source</a>
+    <button popovertarget="credits">Credits</button>
+  </div>
 </div>
 
 <div id="credits" popover>
