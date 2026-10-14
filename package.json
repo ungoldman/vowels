@@ -9,6 +9,7 @@
   "engines": {
     "node": ">=22.12.0"
   },
+  "license": "ISC",
   "private": true,
   "scripts": {
     "coverage": "node --test --experimental-test-coverage --test-coverage-exclude='test/**' --test-coverage-exclude='src/start.js' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 test/*.test.js",
