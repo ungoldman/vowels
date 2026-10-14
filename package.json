@@ -15,7 +15,6 @@
     "coverage": "node --test --experimental-test-coverage --test-coverage-exclude='test/**' --test-coverage-exclude='src/start.js' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 test/*.test.js",
     "format": "biome check --write .",
     "lint": "biome check .",
-    "site": "cp src/index.html src/app.js src/vowels.js src/synth.js ../ungoldman.github.io/vowels/",
     "start": "node src/start.js",
     "test": "npm run lint && node --test test/*.test.js"
   },

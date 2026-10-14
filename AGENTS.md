@@ -4,9 +4,8 @@
 - run: `npm start` (port 4173. `PORT` changes it. `-- --no-open` skips browser.)
 - test: `npm test`, `npm run coverage`
 - format: `npm run format`
-- copy to site: `npm run site` (into `../ungoldman.github.io/vowels/`)
 
-Node 22.12+. Browser with audio worklets. Do not alter version.
+Node 22.12+. Browser with audio worklets. Do not alter version. Push to `main` deploys https://ungoldman.com/vowels via `pages.yml`.
 
 ## Conventions
 
