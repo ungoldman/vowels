@@ -252,13 +252,12 @@ function slide(to, ms = SLIDE) {
 }
 
 const songButton = document.getElementById('song')
-const player = document.getElementById('player')
 const pauseButton = document.getElementById('pause')
 const nowPlaying = document.getElementById('now')
 const faces = document.getElementById('head')
 
 function showSong() {
-  player.classList.toggle('playing', songBefore !== null)
+  document.body.classList.toggle('playing', songBefore !== null)
   faces.classList.toggle('singing', songBefore !== null)
   songButton.setAttribute('aria-pressed', songBefore !== null)
   nowPlaying.textContent = SONGS[songIndex].title
@@ -435,9 +434,14 @@ function playSong(index, from = 0) {
 const turn = (by) => playSong((songIndex + by + SONGS.length) % SONGS.length)
 songButton.addEventListener('click', () => {
   // the click ending a long press has already opened the list
-  if (pressedLong) pressedLong = false
+  if (closedByPress) closedByPress = false
+  else if (pressedLong) pressedLong = false
   else if (songBefore) stopSong()
-  else playSong(songIndex)
+  else {
+    playSong(songIndex)
+    // the sheet would cover the faces the song brings in
+    if (narrow.matches) setOpen(false)
+  }
 })
 // a paused song resumes at the note it was cut off in
 pauseButton.addEventListener('click', () =>
@@ -451,8 +455,11 @@ document.getElementById('next').addEventListener('click', () => turn(1))
 // on the release of the long press.
 const tracks = document.getElementById('tracks')
 const LONG_PRESS = 450
+// least gap between the song list and the screen edge, in px
+const MENU_EDGE = 8
 let pressTimer = 0
 let pressedLong = false
+let closedByPress = false
 SONGS.forEach(({ title }, i) => {
   const item = document.createElement('button')
   item.textContent = title
@@ -465,17 +472,23 @@ SONGS.forEach(({ title }, i) => {
 const tracksOpen = () => tracks.matches(':popover-open')
 function openTracks() {
   if (tracksOpen()) return
-  // by the button, left edges aligned, on the side with more room
-  const { top, bottom, left } = songButton.getBoundingClientRect()
+  // by the button on the side with more room
+  const { top, bottom, left, right } = songButton.getBoundingClientRect()
   const above = top > window.innerHeight - bottom
-  tracks.style.left = `${left}px`
   tracks.style.top = above ? 'auto' : `${bottom + 6}px`
   tracks.style.bottom = above ? `${window.innerHeight - top + 6}px` : 'auto'
   tracks.style.maxHeight = `${(above ? top : window.innerHeight - bottom) - 16}px`
   tracks.showPopover()
+  // left edges aligned, or right edges where that would run off the screen
+  const { width } = tracks.getBoundingClientRect()
+  const x = left + width > window.innerWidth - MENU_EDGE ? right - width : left
+  tracks.style.left = `${Math.max(MENU_EDGE, x)}px`
 }
 songButton.addEventListener('pointerdown', () => {
   pressedLong = false
+  // a press while the list is open only shuts it, and its click starts nothing
+  closedByPress = tracksOpen()
+  if (closedByPress) return tracks.hidePopover()
   pressTimer = setTimeout(() => {
     pressedLong = true
     openTracks()
@@ -515,12 +528,12 @@ function scramble() {
   applyPresets()
 }
 
-// One random sound: half the time a vowel well away from the last, half the
-// time a glide between two symbols of the current rounding. It moves no control
-// unless everything is asked for, which is Shift.
-function shuffle(everything) {
+// One random sound after every setting has changed: half the time a vowel well
+// away from the last, half the time a glide between two symbols of the new
+// rounding.
+function shuffle() {
   cancelAnimationFrame(gliding)
-  if (everything) scramble()
+  scramble()
   if (Math.random() < 0.5) {
     const last = randomPos
     do randomPos = [Math.random(), Math.random()]
@@ -540,20 +553,19 @@ function shuffle(everything) {
   glide(lastGlide, from[0], to[0])
 }
 
-function startRandom(everything) {
+function startRandom() {
   wake()
   cancelAnimationFrame(gliding)
   clearTimeout(ringTimer)
   clearInterval(randomTimer)
-  shuffle(everything)
-  randomTimer = setInterval(() => shuffle(everything), RANDOM_EVERY)
+  shuffle()
+  randomTimer = setInterval(shuffle, RANDOM_EVERY)
 }
 
-// Button and key do the same, down and up. Shift is read on the way down, for
-// the whole hold.
-function pressRandom(event) {
+// Button and key do the same, down and up.
+function pressRandom() {
   randomHeld = true
-  startRandom(event.shiftKey)
+  startRandom()
   voiceOn(true)
 }
 
@@ -569,14 +581,14 @@ const randomButton = document.getElementById('random')
 
 randomButton.addEventListener('pointerdown', (event) => {
   randomButton.setPointerCapture(event.pointerId)
-  pressRandom(event)
+  pressRandom()
 })
 randomButton.addEventListener('pointerup', releaseRandom)
 randomButton.addEventListener('pointercancel', releaseRandom)
 // a click with no pointer behind it came from the keyboard
 randomButton.addEventListener('click', (event) => {
   if (event.detail !== 0) return
-  pressRandom(event)
+  pressRandom()
   releaseRandom()
 })
 
@@ -606,19 +618,30 @@ chart.addEventListener(
   { passive: false }
 )
 
-// A narrow screen moves the face out of the chart and the one-tap controls out
-// of the panel, and crops the chart to its frame. Each mover leaves a marker to
-// come back to. The query is index.html's narrow rule. The wide box runs past
-// the chart on the left, where the faces are.
+// The Controls button opens and shuts the drawer, and its icon follows
+// aria-expanded. Escape and a change of layout shut it.
+const more = document.getElementById('more')
+function setOpen(open) {
+  document.body.classList.toggle('open', open)
+  more.setAttribute('aria-expanded', open)
+  more.setAttribute('aria-label', open ? 'Close controls' : 'Controls')
+}
+more.addEventListener('click', () => setOpen(!document.body.classList.contains('open')))
+
+// A narrow screen moves the faces out of the chart, voice and preset out of the
+// panel into the dock, and Reset in with the credits, and crops the chart to
+// its frame. Each mover leaves a marker to come back to. The query is
+// index.html's narrow rule. The wide box runs past the chart on the left, where
+// the faces are.
 const WIDE_BOX = '-60 15 700 410'
 const NARROW_BOX = '22 15 553 405'
 const narrow = matchMedia(
-  '(max-width: 859.98px) and (orientation: portrait), (max-width: 619.98px)'
+  '(max-width: 1099.98px) and (orientation: portrait), (max-width: 619.98px)'
 )
 const quick = document.getElementById('quick')
 const MOVERS = [
   [faces, document.getElementById('portrait')],
-  [document.getElementById('transport'), document.getElementById('stage')],
+  [document.getElementById('reset'), document.getElementById('foot')],
   [voice.closest('label'), quick],
   [phonation.closest('label'), quick]
 ].map(([mover, away]) => {
@@ -632,14 +655,10 @@ function arrange() {
     else home.after(mover)
   }
   chart.setAttribute('viewBox', narrow.matches ? NARROW_BOX : WIDE_BOX)
+  setOpen(false)
 }
 narrow.addEventListener('change', arrange)
 arrange()
-
-const more = document.getElementById('more')
-more.addEventListener('click', () => {
-  more.setAttribute('aria-expanded', document.body.classList.toggle('open'))
-})
 
 const reset = document.getElementById('reset')
 const SOURCE = [tilt, breath, ...Object.values(fold)]
@@ -812,6 +831,7 @@ const ownKeys = (target) => (target.matches?.('select, input[type="range"]') ? M
 window.addEventListener('keydown', (event) => {
   if (event.code === 'Escape') {
     if (tracksOpen()) tracks.hidePopover()
+    else setOpen(false)
     document.activeElement?.blur()
     return
   }
@@ -833,7 +853,7 @@ window.addEventListener('keydown', (event) => {
 
   if (code === RANDOM_KEY) {
     event.preventDefault()
-    if (!event.repeat) pressRandom(event)
+    if (!event.repeat) pressRandom()
     return
   }
 
@@ -939,7 +959,7 @@ ctx.audioWorklet.addModule('synth.js').then(() => {
 const FACE_X = 45,
   FACE_Y = 258
 // about where the narrow layout puts the face, in chart coordinates
-const UNDER_CHART = [120, 560]
+const UNDER_CHART = [300, 600]
 // Reduced motion stops the blink, the one movement nobody asked for. The mouth
 // still eases, since it only answers the controls.
 const still = matchMedia('(prefers-reduced-motion: reduce)').matches

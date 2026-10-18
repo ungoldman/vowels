@@ -2,14 +2,19 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vowel chart</title>
-<meta name="description" content="A playable IPA vowel chart. A small formant synthesizer says each vowel while a wireframe face mouths along.">
+<title>VOWELS</title>
+<meta name="description" content="IPA formant synthesizer">
 <meta name="theme-color" content="#000">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" sizes="any">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Vowel chart">
-<meta property="og:description" content="A playable IPA vowel chart. A small formant synthesizer says each vowel while a wireframe face mouths along.">
+<meta property="og:title" content="VOWELS">
+<meta property="og:description" content="IPA formant synthesizer">
 <meta property="og:url" content="https://ungoldman.com/vowels/">
+<meta property="og:image" content="https://ungoldman.com/vowels/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="An IPA vowel chart beside three wireframe faces singing">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   /* palette and type follow ungoldman.com: black field, monospace readout */
   :root {
@@ -21,12 +26,17 @@
     --rule: rgba(255, 255, 255, 0.28);
     --mono: ui-monospace, Menlo, Consolas, monospace;
     --ipa: "Charis SIL", "Doulos SIL", "Gentium Plus", serif;
+    /* the side panel grows a little with the screen */
+    --panel: clamp(330px, 22vw, 420px);
   }
   /* On a wide screen the stage (title and chart) stays in view with the
-     panel a full-height column beside it. On a narrow one the face leaves
-     the chart for a row of its own, the one-tap controls sit beside and
-     under it, and the sliders are a sheet that slides up from the bottom.
-     app.js moves the face and those controls when the layout changes. */
+     panel a full-height column beside it. On a narrow one, any portrait
+     screen under 1100px, the faces leave the chart for a row of their own,
+     voice and preset sit in a dock at the bottom, and the rest is a sheet
+     that slides up from the dock. app.js moves the faces, voice, and preset
+     when the layout changes. */
+  /* a quick second tap is a second press, never a zoom */
+  html { touch-action: manipulation; }
   body {
     box-sizing: border-box;
     min-height: 100dvh;
@@ -47,7 +57,7 @@
     padding: 12px 0;
     background: var(--bg);
   }
-  header { display: flex; align-items: baseline; gap: 1.5ch; }
+  header { display: flex; align-items: center; gap: 10px; }
   header .rule,
   h2::after {
     content: "";
@@ -56,7 +66,7 @@
     align-self: center;
     background: linear-gradient(90deg, var(--rule), rgba(255, 255, 255, 0));
   }
-  #home { color: var(--dim); text-decoration: none; }
+  #home { display: inline-flex; align-items: center; color: var(--dim); text-decoration: none; }
   #home:hover, #home:focus-visible { color: var(--fg); }
   h1 { margin: 0; font-size: 1.2rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
   header p { margin: 0; color: var(--dim); letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -124,8 +134,6 @@
   #readout > span:first-child { display: inline-flex; align-items: baseline; }
   #symbol { font: 18px/1 var(--ipa); margin-right: 1.5ch; }
   #formants { color: var(--dim); }
-  /* the one control a phone keeps beside the face */
-  #transport { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
   #panel {
     display: flex;
     flex-direction: column;
@@ -136,7 +144,6 @@
   section { display: grid; gap: 8px; }
   h2 { display: flex; gap: 1.5ch; margin: 0; font-size: 10px; font-weight: 400; letter-spacing: 0.3em; text-transform: uppercase; color: var(--faint); }
   h2 button { order: 1; }
-  .extra { display: flex; align-items: center; gap: 1.5ch; }
   label {
     display: inline-flex;
     align-items: center;
@@ -178,14 +185,77 @@
   }
   button.small { font-size: 10px; padding: 1px 8px; margin: -3px 0; }
   button:disabled { visibility: hidden; }
-  /* the song button, with a deck beside it that shows while a song is loaded */
-  #player { display: flex; align-items: center; gap: 6px; }
-  #player:not(.playing) > :not(#song) { display: none; }
-  #player button { margin: 0; }
-  #now { min-width: 0; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; letter-spacing: 0.04em; color: var(--dim); }
-  /* a long press opens the song list, so the press must not select or call up a menu */
-  #song { opacity: 0.65; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-  #song:hover, #song:focus-visible, #song[aria-pressed="true"] { opacity: 1; }
+  /* The song lives at the right end of the header on every screen: a button
+     that plays and stops, a pause once a song is loaded, and on a wide
+     screen the skips too. The title joins them, right-aligned, where the rule
+     was. A long press on the button lists the songs. */
+  header > button { flex: none; width: 32px; min-width: 32px; height: 32px; min-height: 32px; margin: 0; padding: 0; opacity: 1; font-size: 12px; }
+  header > #song { font-size: 15px; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  header > #song[aria-pressed="true"] { background: rgba(255, 255, 255, 0.18); }
+  header > :is(#prev, #pause, #next) { display: none; }
+  .playing header > :is(#prev, #pause, #next) { display: inline-flex; align-items: center; justify-content: center; animation: fade-in 0.4s ease; }
+  #now {
+    display: none;
+    flex: 0 1 auto;
+    min-width: 0;
+    margin: 0 0 0 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fg);
+  }
+  .playing #now { display: block; animation: fade-in 0.5s ease; }
+  @keyframes fade-in { from { opacity: 0; } }
+  /* the play row: two switches and the random button, the same on every screen */
+  #advanced { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  #advanced h2 { grid-column: 1 / -1; }
+  .toggle { position: relative; display: flex; min-width: 0; }
+  .toggle input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .toggle span {
+    position: relative;
+    flex: 1;
+    box-sizing: border-box;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fg);
+  }
+  /* a switch: a track, and a knob that slides to the right when on */
+  .toggle span::before {
+    content: "";
+    flex: none;
+    box-sizing: border-box;
+    width: 32px;
+    height: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    background: #1c1c20;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .toggle span::after {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    margin-top: -6px;
+    border-radius: 50%;
+    background: var(--dim);
+    transition: transform 0.2s, background 0.2s;
+  }
+  .toggle input:checked + span::before { background: var(--fg); border-color: var(--fg); }
+  .toggle input:checked + span::after { background: #000; transform: translateX(12px); }
+  .toggle input:focus-visible + span::before { outline: 1px solid rgba(255, 255, 255, 0.5); outline-offset: 2px; }
+  #random { min-height: 32px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
   /* links at the foot of the panel, and the sheet of credits one opens */
   #foot { display: flex; align-items: center; gap: 12px; align-self: flex-end; margin-top: auto; }
   #foot > * { padding: 0; border: 0; font-size: 10px; letter-spacing: 0; color: var(--dim); text-decoration: underline; text-underline-offset: 3px; }
@@ -203,9 +273,7 @@
   #tracks:popover-open { display: grid; }
   #tracks button { border: 0; border-radius: 4px; padding: 5px 10px; text-align: left; }
   #tracks button[aria-current="true"] { background: rgba(255, 255, 255, 0.18); }
-  #song:hover, #song:focus-visible, #song[aria-pressed="true"] { opacity: 1; }
-  /* in the title bar, where the open sheet cannot cover it */
-  #more { align-self: center; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+  #drawer, #sheet { display: contents; }
   button[aria-expanded="true"] { background: rgba(255, 255, 255, 0.18); }
   button:hover,
   button:focus-visible { background: rgba(255, 255, 255, 0.12); text-shadow: 0 0 12px rgba(255, 255, 255, 0.6); }
@@ -223,81 +291,219 @@
   #keys { border-collapse: collapse; font-size: 11px; letter-spacing: 0.02em; color: var(--dim); }
   #keys th { padding: 2px 2ch 2px 0; font-weight: 400; text-align: left; white-space: nowrap; color: var(--fg); }
   #keys td { padding: 2px 0; }
-  @media (min-width: 860px), (orientation: landscape) and (min-width: 620px) {
-    body { grid-template-columns: minmax(0, 1fr) 330px; column-gap: 20px; }
-    /* the chart takes whatever height the rest of the stage leaves */
-    #stage { position: sticky; top: 0; height: 100dvh; grid-template-rows: auto minmax(0, 1fr); }
+  @media (min-width: 1100px), (orientation: landscape) and (min-width: 620px) {
+    /* One screen: the header runs across the top, and the chart and the panel
+       share the row under it. A panel too tall for the window scrolls within
+       itself, with no bar drawn. */
+    body { height: 100dvh; grid-template-columns: minmax(0, 1fr) var(--panel); grid-template-rows: auto minmax(0, 1fr); column-gap: 20px; }
+    header { grid-column: 1 / -1; padding: 12px 0 8px; }
+    #stage { align-self: stretch; min-height: 0; padding-top: 0; grid-template-rows: minmax(0, 1fr); }
     #chart { height: 100%; aspect-ratio: auto; max-height: none; }
-    #panel { align-self: stretch; margin: 8px 0; padding: 0 0 0 20px; border-top: 0; border-left: 1px solid rgba(255, 255, 255, 0.12); }
-    /* packed so the whole panel shows in a 1080p browser window without scrolling */
-    #panel { gap: 9px; }
-    #panel section { gap: 4px; }
+    #panel { align-self: stretch; min-height: 0; overflow-y: auto; scrollbar-width: none; margin: 0 0 8px; padding: 4px 0 0 20px; border-top: 0; border-left: 1px solid rgba(255, 255, 255, 0.12); }
+    #panel::-webkit-scrollbar { display: none; }
+    /* Spaced by the screen's height, so a tall window is not a short panel
+       with empty room under it. The keys sit at the foot with the credits, and
+       the controls above them take what they need. */
+    #panel { gap: clamp(12px, 2.6vh, 34px); }
+    #panel section { gap: clamp(4px, 0.9vh, 10px); }
+    #panel .slider { min-height: clamp(20px, 3vh, 34px); align-items: center; }
     #panel .slider input { height: 14px; }
+    #keys-section { margin-top: auto; }
     #panel button { padding: 2px 9px; }
     #panel button.small { padding: 0 8px; }
     #panel select { padding: 1px 6px; }
     #keys th { padding: 0 2ch 0 0; }
     #keys td { padding: 0; }
-    #more, #portrait, #quick, #readout { display: none; }
+    #dock, #portrait, #readout { display: none; }
   }
-  /* every screen the rule above leaves out */
-  @media (max-width: 859.98px) and (orientation: portrait), (max-width: 619.98px) {
-    #stage { grid-template-columns: 112px minmax(0, 1fr); gap: 6px 12px; padding-top: 8px; }
-    #stage > header, #chart, #quick { grid-column: 1 / -1; }
-    /* app.js appends the transport to the stage, so each row is named */
-    #readout { grid-area: 3 / 2; }
-    #transport { grid-area: 4 / 2; }
-    #quick { grid-row: 5; }
-    #vowel { display: none; }
+  /* the panel is small beside a chart that big, so it grows */
+  @media (min-width: 1600px) and (min-width: 1100px) {
+    #panel label { font-size: 12px; }
+    #panel .slider { grid-template-columns: 132px minmax(0, 1fr) 7ch; }
+    #panel .slider input { height: 16px; }
+    #panel select { padding: 2px 8px; font-size: 13px; }
+    #panel button { padding: 3px 11px; }
+    .toggle span, #random { min-height: 36px; }
+    #keys, kbd { font-size: 12px; }
+  }
+  /* fingers need bigger targets than a cursor does */
+  @media (pointer: coarse) {
+    button, select { min-height: 40px; }
+    button { min-width: 44px; }
+    button.small { min-height: 30px; }
+    .slider { min-height: 36px; }
+    #panel { gap: 18px; }
+    #panel .slider { min-height: 36px; }
+    #panel .slider input { height: 26px; }
+    header > button { width: 36px; min-width: 36px; height: 36px; min-height: 36px; }
+    .toggle span, #random { min-height: 40px; }
+  }
+  /* a phone on its side is a wide screen with no height: the panel becomes two
+     columns of cells, name and value over the track, as in the phone's sheet,
+     with the keys left off and Reset beside the credits */
+  @media (orientation: landscape) and (min-width: 620px) and (max-height: 560px) {
+    #panel { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: min-content; align-content: start; gap: 4px 16px; padding-top: 0; }
+    #speaker, #phonation-section { display: contents; }
+    #speaker h2, #advanced h2, #keys-section { display: none; }
+    #advanced { grid-column: 1 / -1; }
+    #panel kbd { display: none; }
+    #panel .slider { min-height: 0; grid-template-columns: 1fr auto; grid-template-areas: "name value" "track track"; align-items: center; gap: 0 8px; }
+    #panel .slider:has(#pitch) { grid-column: 1 / -1; }
+    #panel .slider .name { grid-area: name; font-size: 10px; letter-spacing: 0.1em; }
+    #panel .slider .value { grid-area: value; font-size: 11px; }
+    #panel .slider input { grid-area: track; height: 20px; }
+    #panel .slider select { grid-area: track; min-height: 32px; }
+    #phonation-section h2 { display: flex; grid-column: 1; order: 98; gap: 0; font-size: 0; }
+    #phonation-section h2::after { display: none; }
+    #foot { grid-column: 2; order: 99; justify-self: end; align-self: center; margin: 0; }
+    .toggle span, #random { min-height: 32px; }
+  }
+  /* every screen the rules above leave out: any portrait screen under 1100px,
+     and anything under 620px */
+  @media (max-width: 1099.98px) and (orientation: portrait), (max-width: 619.98px) {
+    /* The dock sits at the foot of the screen, or of the page when it is
+       longer. What the stage has left over goes half above the faces and half
+       below the readout, so the two read as one figure with air around it. */
+    body { grid-template-rows: auto 1fr; }
+    #stage { display: flex; flex-direction: column; align-self: stretch; gap: 4px; padding-top: 0; }
+    #stage > * { flex: none; }
+    #chart { margin-bottom: 10px; }
+    #portrait { margin-top: auto; }
+    #readout { margin: -4px 0 auto; padding-bottom: 10px; }
+    #speaker h2, #advanced h2 { display: none; }
     /* cropped to the frame, which app.js matches in the viewBox */
     #chart { aspect-ratio: 553 / 405; }
-    /* the face has a narrow column to itself, with no room beside it */
-    .side, #caption, .side-head { display: none; }
-    #portrait { grid-area: 3 / 1 / span 2; width: 100%; }
+    .side, #caption, .key { display: none; }
+    /* The chart's height from its width, and the faces' row, which takes
+       what a tall screen leaves over. 255px is the header, the readout, the
+       dock, and the air around the figure. The gutter keeps the dock and the
+       sheet to a phone's width on a tablet, centered. */
+    :root {
+      --chart: calc((100vw - 32px) * 0.732);
+      --dock: 64px;
+      --head: 56px;
+      --faces: clamp(140px, calc(100dvh - var(--chart) - 255px), max(270px, 36vw));
+      --gutter: max(16px, calc((100vw - 560px) / 2));
+    }
+    /* the viewBox keeps room for the side heads, so a song only fades them in */
+    #portrait { width: 100%; height: var(--faces); }
     #mesh, .mesh { stroke-width: 0.7; stroke-opacity: 0.34; }
     #nodes, .nodes { stroke-width: 2; stroke-opacity: 0.6; }
     #outline, .outline { stroke-width: 1.3; stroke-opacity: 0.85; }
     #features, .features { stroke-width: 1.2; stroke-opacity: 0.9; }
     #mouth, .mouth { stroke-width: 1.5; }
-    #readout { justify-items: start; align-self: end; letter-spacing: 0; }
-    #readout > span:first-child { display: grid; gap: 4px; }
-    #readout > span { white-space: normal; }
-    #symbol { font-size: 30px; }
-    /* room for the longest name on two lines */
-    #name { min-height: 2.8em; }
-    #transport { align-self: start; gap: 8px 10px; }
-    #quick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
-    #quick .slider { grid-template-columns: auto minmax(0, 1fr); }
-    /* The sheet stops under the face, so the chart, the face, and the row
-       beside it stay in view. 228px is the stage down to there, less its
-       chart. A short screen leaves it little height, never under 160px,
-       and it scrolls by touch with no bar drawn. */
-    #panel section { gap: 2px; }
-    #panel .slider { min-height: 34px; }
-    #speaker h2 { display: none; }
-    #panel {
+    #readout { letter-spacing: 0; }
+    #readout > span { white-space: nowrap; }
+    #symbol { font-size: 24px; }
+    /* The header stays bare on the black, with room to breathe: more above
+       than below. The skips are left to the song list here. */
+    header { box-sizing: border-box; min-height: var(--head); margin: 0 0 8px; padding: 12px 0 8px; gap: 8px; }
+    .playing header > :is(#prev, #next) { display: none; }
+    /* The dock and the drawer are one sheet pinned to the foot of the screen,
+       its top corners rounded. Shut, it is only the dock. Open, the dock stays
+       at the top of the sheet and the sheet grows up from the bottom. */
+    body { padding-bottom: calc(var(--dock) + env(safe-area-inset-bottom)); }
+    body > #panel {
       position: fixed;
       inset: auto 0 0;
       z-index: 2;
-      max-height: max(160px, calc(100dvh - (100vw - 32px) * 0.732 - 228px));
+      gap: 0;
+      margin: 0;
+      padding: 0 0 env(safe-area-inset-bottom);
+      overflow: hidden;
+      background: #0b0b0d;
+      border: 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px 14px 0 0;
+      box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.7);
+    }
+    /* one line: voice, preset, and the button for the rest */
+    #dock {
+      box-sizing: border-box;
+      min-height: var(--dock);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px var(--gutter);
+    }
+    #quick { flex: 1; min-width: 0; display: flex; gap: 8px; }
+    #quick .slider { flex: 1; min-width: 0; display: block; }
+    #quick .name { display: none; }
+    /* iOS zooms in on a control focused with type under 16px */
+    #quick select { width: 100%; box-sizing: border-box; height: 40px; min-height: 40px; font-size: 16px; letter-spacing: 0.04em; padding: 2px 4px 2px 8px; }
+    /* the sheet's button is an icon, so it cannot pass for a third select: the
+       sliders it holds when shut, a cross to shut it when open */
+    #more { flex: none; display: grid; place-items: center; width: 40px; min-width: 40px; height: 40px; padding: 0; }
+    #more .glyph { grid-area: 1 / 1; width: 20px; height: 20px; fill: currentColor; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; transition: opacity 0.2s, transform 0.25s; }
+    #more .sliders circle { stroke: none; }
+    #more .sliders path, #more .close path { fill: none; }
+    #more .close, #more[aria-expanded="true"] .sliders { opacity: 0; transform: rotate(-90deg) scale(0.6); }
+    #more[aria-expanded="true"] .close { opacity: 1; transform: none; }
+    /* the sheet: the sliders in two columns of cells, name and value over the
+       track, then the play row, then the credits and Reset */
+    #advanced { grid-column: 1 / -1; margin-top: 6px; }
+    .toggle span, #random { min-height: 36px; }
+    #phonation-section h2 { display: none; }
+    #speaker, #phonation-section { display: contents; }
+    #advanced { order: 1; }
+    #foot { order: 3; }
+    #keys-section { display: none; }
+    #foot { grid-column: 1 / -1; }
+    #foot { align-self: auto; margin-top: 0; }
+    #foot > #reset { order: -1; margin-right: auto; }
+    #foot > button { min-width: 0; min-height: 32px; }
+    #sheet kbd { display: none; }
+    #sheet .slider {
+      min-height: 0;
+      grid-template-columns: 1fr auto;
+      grid-template-areas: "name value" "track track";
+      align-items: center;
+      gap: 0 8px;
+    }
+    #sheet .slider .name { grid-area: name; font-size: 10px; letter-spacing: 0.1em; }
+    #sheet .slider .value { grid-area: value; font-size: 11px; }
+    #sheet .slider input { grid-area: track; height: 26px; }
+    /* A row of 0fr leaves the drawer no height while it is shut. Open, it
+       stops under the chart, which stays in view and playable. The 10px is the
+       gaps above the chart. A short screen leaves it little height, never
+       under 160px, and it scrolls by touch with no bar drawn. The padding
+       sits on the sheet's ends as spacers, so a shut drawer is no height. */
+    #drawer {
+      display: grid;
+      grid-template-rows: 0fr;
+      visibility: hidden;
+      transition: grid-template-rows 0.25s ease, visibility 0s 0.25s;
+    }
+    .open #drawer { grid-template-rows: 1fr; visibility: visible; transition: grid-template-rows 0.25s ease; }
+    #sheet {
+      box-sizing: border-box;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-content: start;
+      gap: 6px 20px;
+      min-height: 0;
+      max-height: max(160px, calc(100dvh - var(--chart) - var(--head) - 10px - var(--dock) - env(safe-area-inset-bottom)));
       overflow-y: auto;
       overscroll-behavior: contain;
       scrollbar-width: none;
-      gap: 10px;
-      padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-      background: #0b0b0d;
-      border-top: 1px solid var(--rule);
-      border-radius: 14px 14px 0 0;
-      box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.8);
-      transform: translateY(100%);
-      visibility: hidden;
-      transition: transform 0.25s ease, visibility 0s 0.25s;
+      padding: 0 var(--gutter);
     }
-    #panel::-webkit-scrollbar { display: none; }
-    .open #panel { transform: none; visibility: visible; transition: transform 0.25s ease; }
+    #sheet::after { content: ""; grid-column: 1 / -1; height: 2px; }
+    #sheet::-webkit-scrollbar { display: none; }
   }
+  /* a tablet's chart is big, so the readout under the faces grows with it */
+  @media (min-width: 700px) and (max-width: 1099.98px) and (orientation: portrait) {
+    #readout { font-size: 16px; }
+    #symbol { font-size: 34px; }
+  }
+  /* the phone has no room for the tagline or the rule once a title is there */
   @media (max-width: 480px) {
     header p { display: none; }
+    .playing header > .rule { display: none; }
+  }
+  @media (max-width: 340px) {
+    header { gap: 6px; }
+    header > button { width: 32px; min-width: 32px; }
   }
   /* the chart shrinks with the screen, so its type and marks grow to hold their size */
   @media (max-width: 560px) {
@@ -307,33 +513,29 @@
     .anchor { r: 4px; }
     #dot { r: 13px; }
   }
-  /* fingers need bigger targets than a cursor does */
-  @media (pointer: coarse) {
-    button, select { min-height: 40px; }
-    button { min-width: 44px; }
-    button.small { min-height: 30px; }
-    #more { min-height: 32px; }
-    .slider, #transport label, .extra label { min-height: 36px; }
-    #panel { gap: 18px; }
-  }
   /* nothing about the keyboard where there is not one */
   @media (hover: none) and (pointer: coarse) {
     kbd, .key, .keys { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
-    button, #panel, .open #panel, .side-head { transition: none; }
+    button, #drawer, .open #drawer, .side-head, .toggle span::before, .toggle span::after, #more .glyph { transition: none; }
+    #now { animation: none; }
   }
 </style>
 
-<div id="stage">
 <header>
   <a id="home" href="/" title="index" aria-label="back to index">&#8617;</a>
   <h1>Vowels</h1>
   <p>ipa formant synthesizer</p>
   <span class="rule"></span>
-  <button id="more" aria-expanded="false" aria-controls="panel">Sliders</button>
+  <span id="now"></span>
+  <button id="prev" aria-label="Previous song">&laquo;</button>
+  <button id="pause" aria-label="Pause">&#10073;&#10073;</button>
+  <button id="next" aria-label="Next song">&raquo;</button>
+  <button id="song" aria-label="Music" aria-pressed="false" title="Hold to pick a song">&#9834;</button>
 </header>
 
+<div id="stage">
 <svg id="chart" viewBox="-60 15 700 410" role="img" aria-label="IPA vowel chart, press and drag to hear a vowel">
   <polygon class="frame" points="60,50 540,50 540,400 300,400"/>
   <line class="frame" x1="140" y1="166.7" x2="540" y2="166.7"/>
@@ -361,25 +563,24 @@
   <circle id="dot" r="9"/>
 </svg>
 
-<svg id="portrait" viewBox="-11 175 112 172" aria-hidden="true"></svg>
+<svg id="portrait" viewBox="-57 176 204 166" aria-hidden="true"></svg>
 
 <p id="readout"><span><span id="symbol"></span><span id="name"></span></span><span id="formants"></span></p>
-
-<div id="quick"></div>
 </div>
 
 <div id="panel">
-  <section id="vowel">
-    <h2>Vowel</h2>
-    <div id="transport">
-      <label><input type="checkbox" id="round"> Rounded <kbd>`</kbd></label>
-    </div>
-  </section>
-
+  <div id="dock">
+    <div id="quick"></div>
+    <button id="more" aria-label="Controls" aria-expanded="false" aria-controls="drawer">
+      <svg class="glyph sliders" viewBox="0 0 20 20" aria-hidden="true"><path d="M2 6h16M2 14h16"/><circle cx="7" cy="6" r="2.2"/><circle cx="13" cy="14" r="2.2"/></svg>
+      <svg class="glyph close" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4l12 12M16 4L4 16"/></svg>
+    </button>
+  </div>
+  <div id="drawer"><div id="sheet">
   <section id="speaker">
     <h2>Speaker</h2>
     <label class="slider"><span class="name">Voice <kbd>\</kbd></span>
-      <select id="voice">
+      <select id="voice" aria-label="Voice">
         <option value="min">min</option>
         <option value="low" selected>low</option>
         <option value="mid">mid</option>
@@ -387,19 +588,26 @@
         <option value="max">max</option>
       </select>
     </label>
-    <label class="slider"><span class="name">Pitch <kbd>-</kbd> <kbd>=</kbd></span> <input type="range" id="pitch" min="70" max="320" value="120"> <span id="hz" class="value" data-unit=" Hz">120</span></label>
-  </section>
-
-  <section>
-    <h2>Phonation <button id="reset" class="small" disabled>Reset</button></h2>
     <label class="slider"><span class="name">Preset <kbd>P</kbd></span>
-      <select id="phonation">
+      <select id="phonation" aria-label="Preset">
         <option value="modal">modal</option>
         <option value="breathy">breathy</option>
         <option value="creaky">creaky</option>
         <option value="whisper">whisper</option>
       </select>
     </label>
+    <label class="slider"><span class="name">Pitch <kbd>-</kbd> <kbd>=</kbd></span> <input type="range" id="pitch" min="70" max="320" value="120"> <span id="hz" class="value" data-unit=" Hz">120</span></label>
+  </section>
+
+  <section id="advanced">
+    <h2>Play</h2>
+    <label class="toggle" title="Rounded lips (`)"><input type="checkbox" id="round"><span>Rounded</span></label>
+    <label class="toggle" title="Hold the sound (Backspace)"><input type="checkbox" id="latch"><span>Hold</span></label>
+    <button id="random" title="Shuffle every setting and play a random sound (/). Hold to repeat.">Random</button>
+  </section>
+
+  <section id="phonation-section">
+    <h2>Voice quality <button id="reset" class="small" disabled>Reset</button></h2>
     <label class="slider"><span class="name">Tilt <kbd>[</kbd> <kbd>]</kbd></span> <input type="range" id="tilt" min="0" max="24" step="1" value="3"> <span id="db" class="value" data-unit=" dB">3</span></label>
     <label class="slider"><span class="name">Breath <kbd>;</kbd> <kbd>'</kbd></span> <input type="range" id="breath" min="0" max="0.6" step="0.01" value="0.04"> <span class="value"></span></label>
     <label class="slider"><span class="name">Open quotient</span> <input type="range" id="openQuotient" min="0.2" max="0.8" step="0.01" value="0.5"> <span class="value"></span></label>
@@ -409,40 +617,27 @@
     <label class="slider"><span class="name">F1 damping</span> <input type="range" id="openBandwidth" min="0" max="300" step="10" value="0"> <span class="value" data-unit=" Hz"></span></label>
   </section>
 
-  <section>
-    <h2>Advanced</h2>
-    <div class="extra">
-      <label><input type="checkbox" id="latch"> Hold <kbd>&#9003;</kbd></label>
-    </div>
-    <div class="extra">
-      <label><button id="random">Random</button> <kbd>/</kbd></label>
-    </div>
-    <div id="player">
-      <button id="song" aria-label="Music" aria-pressed="false" title="Hold to pick a song">&#9834;</button>
-      <button id="prev" class="small" aria-label="Previous song">&laquo;</button>
-      <button id="pause" class="small" aria-label="Pause">&#10073;&#10073;</button>
-      <button id="next" class="small" aria-label="Next song">&raquo;</button>
-      <span id="now"></span>
-    </div>
-  </section>
-
-  <section class="keys">
+  <section class="keys" id="keys-section">
     <h2>Keys</h2>
     <table id="keys">
       <tr><th scope="row">Chart keys</th><td>play vowel</td></tr>
       <tr><th scope="row">Arrows</th><td>move dot</td></tr>
       <tr><th scope="row">Wheel</th><td>bend pitch</td></tr>
+      <tr><th scope="row"><kbd>`</kbd></th><td>round lips</td></tr>
+      <tr><th scope="row"><kbd>&#9003;</kbd></th><td>hold</td></tr>
+      <tr><th scope="row"><kbd>/</kbd></th><td>shuffle all</td></tr>
       <tr><th scope="row"><kbd>Shift</kbd> <kbd>\</kbd> <kbd>P</kbd></th><td>step back</td></tr>
-      <tr><th scope="row"><kbd>Shift</kbd> <kbd>/</kbd></th><td>shuffle all</td></tr>
       <tr><th scope="row"><kbd>Shift</kbd> <kbd>&#9003;</kbd></th><td>silence</td></tr>
     </table>
   </section>
-  <div id="tracks" popover="manual" aria-label="Songs"></div>
 
   <div id="foot">
     <a href="https://github.com/ungoldman/vowels">Source</a>
     <button popovertarget="credits">Credits</button>
   </div>
+  </div></div>
+
+  <div id="tracks" popover="manual" aria-label="Songs"></div>
 </div>
 
 <div id="credits" popover>
@@ -472,7 +667,7 @@
     <li><b>The Parting Glass.</b> Scots and Irish traditional. <a href="https://thesession.org/tunes/6275#setting6275">Setting</a> by Fiddle Inferno on The Session.</li>
   </ul>
   <h3>AI disclosure</h3>
-  <p>The code, tests, song transcriptions, and harmonies were written with Claude Code using Opus 5.5, from 11 to 13 October 2026. Each feature and change was directed and reviewed by the author, and the sound was judged by ear. Claude also found the sources above and checked the synthesizer's defaults and resonator formula against Klatt's original Fortran. The formant values are Catford's. F3, the voice settings, and the faces are estimates with no source. Links and sources were double-checked against the originals on 13 October 2026.</p>
+  <p>The code, tests, song transcriptions, and harmonies were written with Claude Code using Opus 5.5, from 11 to 17 October 2026. Each feature and change was directed and reviewed by the author, and the sound was judged by ear. Claude also found the sources above and checked the synthesizer's defaults and resonator formula against Klatt's original Fortran. The formant values are Catford's. F3, the voice settings, and the faces are estimates with no source. Links and sources were double-checked against the originals on 13 October 2026.</p>
 </div>
 
 <script type="module" src="app.js"></script>
