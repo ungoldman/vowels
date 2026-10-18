@@ -1,6 +1,6 @@
 {
   "name": "vowels",
-  "description": "A playable IPA vowel chart",
+  "description": "IPA formant synthesizer",
   "version": "0.0.0",
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
