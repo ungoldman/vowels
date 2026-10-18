@@ -25,6 +25,13 @@ function level(x, hz) {
   return 20 * Math.log10(Math.hypot(re, im) / x.length + 1e-12)
 }
 
+// mean level over a band, since one bin of noise swings by 10 dB from run to run
+function band(x, hz) {
+  const bins = Array.from({ length: 9 }, (_, i) => hz - 20 + 5 * i)
+  const power = bins.reduce((sum, f) => sum + 10 ** (level(x, f) / 10), 0) / bins.length
+  return 10 * Math.log10(power)
+}
+
 // a steady voice with no wobble or noise, so harmonics sit on exact multiples
 const steady = { on: true, breath: 0, jitter: 0, shimmer: 0, drift: 0 }
 
@@ -97,7 +104,7 @@ test('a whisper is noise with no pitch', () => {
   const x = render(synth, 300)
   assert.ok(peak(x) > 0.01)
   // no harmonic stands out from its neighbours the way a voiced one does
-  assert.ok(level(x, 120) < level(x, 180) + 12)
+  assert.ok(band(x, 120) < band(x, 180) + 12)
 })
 
 test('breathy and creaky settings render without blowing up', () => {
