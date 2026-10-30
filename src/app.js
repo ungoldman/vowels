@@ -65,6 +65,11 @@ let synth
 
 const send = (params) => synth?.port.postMessage(params)
 const wake = () => ctx.resume()
+// A touch only counts as a gesture once the finger lifts, so resume on the way
+// up as well. iOS also suspends the context on its own, after a lock or a call.
+for (const type of ['pointerup', 'touchend', 'click', 'keydown']) {
+  window.addEventListener(type, () => ctx.state === 'running' || wake(), true)
+}
 
 // rounded runs 0 to 1, so a glide can pass through the lip shapes between
 function sound(freqs, u, v, label, rounded, smooth = 0.015) {
@@ -104,6 +109,8 @@ let gliding = 0
 // what holds the voice on: a pointer on the chart, and the chart keys
 let held = false
 let finger = 0
+// the press came while the context was asleep, so nobody heard it
+let unheard = false
 const keys = []
 const arrows = new Set()
 let arrowTimer = 0
@@ -182,6 +189,7 @@ chart.addEventListener('pointerdown', (event) => {
   // the caption is text to select
   if (event.target.closest('#caption')) return
   if (event.button) return
+  unheard = ctx.state !== 'running'
   wake()
   cancelAnimationFrame(gliding)
   held = true
@@ -199,7 +207,9 @@ chart.addEventListener('pointermove', (event) => {
 function release(event) {
   if (event.pointerId !== finger) return
   held = false
-  gate()
+  // the lift that wakes the context would otherwise end the note as it starts
+  if (unheard && event.type === 'pointerup') ringTimer = setTimeout(gate, RING)
+  else gate()
 }
 
 chart.addEventListener('pointerup', release)
