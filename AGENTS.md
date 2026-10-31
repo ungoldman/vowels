@@ -13,6 +13,7 @@ Node 22.12+. Browser with audio worklets. Do not alter version. Push to `main` d
 - No AI attribution in commits.
 - Breaking changes discouraged. They need `BREAKING CHANGE:` footer.
 - Plain JS modules. No build. Relative paths, so page drops into any static site.
+- On ungoldman.com the page joins the site's router, see the page contract in `ungoldman.github.io/AGENTS.md`. `/router.js` and `/router/controls.js` are absent on the dev server and that is fine. `mount()` in `src/app.js` runs again in the same document, and what it returns undoes everything outside the page's own nodes.
 - Number from paper names it in comment. Guess says so.
 - Few comments, kept trim.
 - 100% coverage on `src/vowels.js`, `src/synth.js`, `src/server.js`. `src/app.js` is checked in browser.

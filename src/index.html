@@ -15,6 +15,7 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="An IPA vowel chart beside three wireframe faces singing">
 <meta name="twitter:card" content="summary_large_image">
+<script type="module" src="/router.js"></script>
 <style>
   /* palette and type follow ungoldman.com: black field, monospace readout */
   :root {
@@ -49,6 +50,8 @@
     color: var(--fg);
     font: 13px/1.4 var(--mono);
   }
+  /* after the index folds away, on a swap from it */
+  #stage, #panel { animation: fade-in 0.25s ease 0.2s backwards; }
   #stage {
     box-sizing: border-box;
     display: grid;
@@ -69,6 +72,7 @@
   #home { display: inline-flex; align-items: center; color: var(--dim); text-decoration: none; }
   #home:hover, #home:focus-visible { color: var(--fg); }
   h1 { margin: 0; font-size: 1.2rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+  header h1 { line-height: 1.4; }
   header p { margin: 0; color: var(--dim); letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #chart {
     width: 100%;
@@ -670,5 +674,8 @@
   <p>The code, tests, song transcriptions, and harmonies were written with Claude Code using Opus 5.5, from 11 to 17 October 2026. Each feature and change was directed and reviewed by the author, and the sound was judged by ear. Claude also found the sources above and checked the synthesizer's defaults and resonator formula against Klatt's original Fortran. The formant values are Catford's. F3, the voice settings, and the faces are estimates with no source. Links and sources were double-checked against the originals on 13 October 2026.</p>
 </div>
 
-<script type="module" src="app.js"></script>
+<script type="module">
+  import { mount } from './app.js'
+  addEventListener('router:leave', mount(), { once: true })
+</script>
 </html>
