@@ -7,7 +7,7 @@
     "url": "https://github.com/ungoldman/vowels/issues"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.15",
+    "@biomejs/biome": "^2.6.4",
     "fast-check": "^4.10.2"
   },
   "engines": {
