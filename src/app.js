@@ -743,9 +743,10 @@ export function mount() {
   latch.addEventListener('change', setLatch)
 
   // A clicked control that kept focus would swallow the shortcuts, so hand focus
-  // back. One reached by keyboard keeps it.
+  // back. One reached by keyboard keeps it. A select waits for change, since
+  // Chrome opens its menu on pointerdown and a blur on pointerup closes it.
   for (const control of document.querySelectorAll('input, select, button')) {
-    control.addEventListener('pointerup', () => control.blur())
+    if (!control.matches('select')) control.addEventListener('pointerup', () => control.blur())
     control.addEventListener('change', () => {
       if (!control.matches(':focus-visible')) control.blur()
     })
